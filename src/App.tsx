@@ -167,7 +167,7 @@ const BaseMap = () => {
     const layersMap = new Map<string, WMSLayer>();
     const layerElements = xml.querySelectorAll('Layer > Layer');
 
-    layerElements.forEach((layerEl, index) => {
+    layerElements.forEach((layerEl) => {
       const name = layerEl.querySelector('Name')?.textContent;
       const title = layerEl.querySelector('Title')?.textContent;
       if (name && title) {
