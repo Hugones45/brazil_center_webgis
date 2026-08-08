@@ -471,7 +471,7 @@ const BaseMap = () => {
     }
   };
 
-  const downloadLayer = async (layerName: string, format: 'geojson' | 'shapefile' | 'csv') => {
+  const downloadLayer = async (layerName: string, format: 'geojson' | 'shapefile' | 'csv' | 'kml') => {
     setDownloadingLayer(layerName);
 
     try {
@@ -491,11 +491,35 @@ const BaseMap = () => {
           url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=csv&srsName=EPSG:4674`;
           fileExtension = 'csv';
           break;
+        case 'kml':
+          url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/vnd.google-earth.kml+xml&srsName=EPSG:4674`;
+          fileExtension = 'kml';
+          break;
       }
 
       const response = needsProxy ? await proxyFetch(url) : await fetch(url);
 
       if (!response.ok) {
+        // If KML fails with WFS 2.0.0, try WFS 1.1.0
+        if (format === 'kml') {
+          const altUrl = `${baseUrl}?service=WFS&version=1.1.0&request=GetFeature&typeName=${layerName}&outputFormat=KML&srsName=EPSG:4674`;
+          const altResponse = needsProxy ? await proxyFetch(altUrl) : await fetch(altUrl);
+
+          if (!altResponse.ok) {
+            throw new Error('KML format not supported by this server');
+          }
+
+          const blob = await altResponse.blob();
+          const downloadUrl = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.download = `${layerName}.kml`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(downloadUrl);
+          return;
+        }
         throw new Error(`Download failed with status ${response.status}`);
       }
 
@@ -997,7 +1021,7 @@ const BaseMap = () => {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: 4, marginLeft: 28 }}>
+                    <div style={{ display: 'flex', gap: 4, marginLeft: 28, flexWrap: 'wrap' }}>
                       <button
                         onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'geojson'); }}
                         disabled={downloadingLayer === layer.name}
@@ -1045,6 +1069,22 @@ const BaseMap = () => {
                         }}
                       >
                         {downloadingLayer === layer.name ? '...' : 'CSV'}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'kml'); }}
+                        disabled={downloadingLayer === layer.name}
+                        style={{
+                          padding: '4px 10px',
+                          fontSize: 10,
+                          backgroundColor: '#E91E63',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: 3,
+                          cursor: 'pointer',
+                          opacity: downloadingLayer === layer.name ? 0.7 : 1
+                        }}
+                      >
+                        {downloadingLayer === layer.name ? '...' : 'KML'}
                       </button>
                     </div>
                   </div>
@@ -1198,6 +1238,22 @@ const BaseMap = () => {
                             }}
                           >
                             {downloadingLayer === layer.name ? '...' : 'CSV'}
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'kml'); }}
+                            disabled={downloadingLayer === layer.name}
+                            style={{
+                              padding: '4px 10px',
+                              fontSize: 10,
+                              backgroundColor: '#E91E63',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: 3,
+                              cursor: 'pointer',
+                              opacity: downloadingLayer === layer.name ? 0.7 : 1
+                            }}
+                          >
+                            {downloadingLayer === layer.name ? '...' : 'KML'}
                           </button>
                         </div>
                       </div>
