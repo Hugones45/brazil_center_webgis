@@ -17,6 +17,10 @@ const CORS_PROXY = 'https://corsproxy.io/?';
 
 // --- ORGANIZED SERVER LIST ---
 const SERVER_OPTIONS = [
+  { label: 'IDE SISEMA (MG)', url: 'https://geoserver.meioambiente.mg.gov.br/ows' },
+  { label: 'EMBRAPA', url: 'https://geoinfo.dados.embrapa.br/geoserver/ows' },
+  { label: 'INPE', url: 'https://terrabrasilis.dpi.inpe.br/geoserver/ows' },
+
   { label: 'IBGE - Malhas Territoriais', url: 'https://geoservicos.ibge.gov.br/geoserver/ows' },
   { label: 'IBGE - CENSO 2022', url: 'https://geoservicoscenso2022.ibge.gov.br/geoserver/censo2022/ows' },
   { label: 'IBGE - ODS', url: 'https://geoservicos.ibge.gov.br/geoserver/ODS/ows' },
@@ -27,13 +31,11 @@ const SERVER_OPTIONS = [
   { label: 'Censipam', url: 'https://panorama.sipam.gov.br/geoserver/publico/ows' },
   { label: 'CPRM / SGB', url: 'https://geoservicos.sgb.gov.br/geoserver/geologia/ows' },
   { label: 'DNIT', url: 'https://geoservicos.inde.gov.br/geoserver/DNIT/ows' },
-  { label: 'EMBRAPA', url: 'https://geoinfo.dados.embrapa.br/geoserver/ows' },
   { label: 'EPE', url: 'https://geoservicos.inde.gov.br/geoserver/EPE/ows' },
   { label: 'FUNAI', url: 'https://geoserver.funai.gov.br/geoserver/ows' },
   { label: 'FUNAI/CMR', url: 'https://cmr.funai.gov.br/geoserver/ows' },
   { label: 'ICA', url: 'https://geoaissweb.decea.gov.br/geoserver/ICA/ows' },
   { label: 'ICMBIO', url: 'https://geoservicos.inde.gov.br/geoserver/ICMBio/ows' },
-  { label: 'INPE', url: 'https://terrabrasilis.dpi.inpe.br/geoserver/ows' },
   { label: 'IPHAN', url: 'https://geoserver.iphan.gov.br/geoserver/ows' },
   { label: 'MB/COMPAAz', url: 'https://geoservicos.inde.gov.br/geoserver/COMPAAz/ows' },
   { label: 'MB/DPC', url: 'https://geoservicos.inde.gov.br/geoserver/DPC/ows' },
@@ -49,7 +51,6 @@ const SERVER_OPTIONS = [
   { label: 'SPU', url: 'https://geoservicos.inde.gov.br/geoserver/SPU/ows' },
   { label: 'VALEC', url: 'https://geoservicos.inde.gov.br/geoserver/VALEC/ows' },
   { label: 'DataGeo - São Paulo', url: 'https://datageo.ambiente.sp.gov.br/geoserver/ows' },
-  { label: 'IDE SISEMA (MG)', url: 'https://geoserver.meioambiente.mg.gov.br/ows' },
   { label: 'IDE-GEOBASES (ES)', url: 'https://ide.geobases.es.gov.br/geoserver/ows' },
   { label: 'INEA (RJ)', url: 'https://geoservicos.inde.gov.br/geoserver/INEA/ows' },
   { label: 'Prefeitura BH (MG) - BH Map', url: 'https://bhmap.pbh.gov.br/v2/api/idebhgeo/wms' },
