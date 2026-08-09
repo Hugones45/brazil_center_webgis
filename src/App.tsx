@@ -1,7 +1,7 @@
 // BaseMap.tsx
 import mapboxgl from "mapbox-gl"
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 
 interface WMSLayer {
   name: string;
@@ -20,7 +20,6 @@ const SERVER_OPTIONS = [
   { label: 'IDE SISEMA (MG)', url: 'https://geoserver.meioambiente.mg.gov.br/ows' },
   { label: 'EMBRAPA', url: 'https://geoinfo.dados.embrapa.br/geoserver/ows' },
   { label: 'INPE', url: 'https://terrabrasilis.dpi.inpe.br/geoserver/ows' },
-
   { label: 'IBGE - Malhas Territoriais', url: 'https://geoservicos.ibge.gov.br/geoserver/ows' },
   { label: 'IBGE - CENSO 2022', url: 'https://geoservicoscenso2022.ibge.gov.br/geoserver/censo2022/ows' },
   { label: 'IBGE - ODS', url: 'https://geoservicos.ibge.gov.br/geoserver/ODS/ows' },
@@ -64,6 +63,145 @@ const SERVER_OPTIONS = [
   { label: 'Custom', url: '' }
 ];
 
+// --- LEGEND BOX COMPONENT ---
+interface LegendBoxProps {
+  activeLayers: Set<string>;
+  baseUrl: string;
+  needsProxy: boolean;
+  layers: WMSLayer[];
+}
+
+const LegendBox = ({ activeLayers, baseUrl, needsProxy, layers }: LegendBoxProps) => {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [legendUrls, setLegendUrls] = useState<Map<string, string>>(new Map());
+  const [zoomLevel, setZoomLevel] = useState(1);
+
+  const activeLayerNames = useMemo(() => {
+    return Array.from(activeLayers).filter(name => layers.some(l => l.name === name));
+  }, [activeLayers, layers]);
+
+  useEffect(() => {
+    if (!baseUrl || activeLayerNames.length === 0) {
+      setLegendUrls(new Map());
+      return;
+    }
+
+    const newUrls = new Map<string, string>();
+    activeLayerNames.forEach(layerName => {
+      let legendUrl = `${baseUrl}?service=WMS&version=1.3.0&request=GetLegendGraphic&layer=${layerName}&format=image/png&width=50&height=50&legend_options=fontSize:12;fontColor:0x000000;`;
+      if (needsProxy) {
+        legendUrl = `${CORS_PROXY}${encodeURIComponent(legendUrl)}`;
+      }
+      newUrls.set(layerName, legendUrl);
+    });
+
+    setLegendUrls(newUrls);
+  }, [baseUrl, needsProxy, activeLayerNames]);
+
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.25, 3));
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.25, 0.5));
+
+  if (activeLayerNames.length === 0) return null;
+
+  return (
+    <div style={{
+      width: '100%',
+      backgroundColor: 'white',
+      borderBottomLeftRadius: 8,
+      borderBottomRightRadius: 8,
+      padding: '15px',
+      display: 'flex',
+      flexDirection: 'column',
+      boxSizing: 'border-box'
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: isExpanded ? '10px' : '0',
+        borderBottom: isExpanded ? '1px solid #eee' : 'none',
+        paddingBottom: isExpanded ? '10px' : '0'
+      }}>
+        <div
+          onClick={() => setIsExpanded(!isExpanded)}
+          style={{ fontWeight: 'bold', fontSize: 16, color: '#333', cursor: 'pointer' }}
+        >
+          Legend
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* ZOOM CONTROLS WITH TOOLTIP */}
+          {isExpanded && (
+            <div style={{ display: 'flex', gap: '2px' }}>
+              <button
+                onClick={handleZoomIn}
+                title="Control label size"
+                style={{ border: '1px solid #ccc', background: '#f5f5f5', borderRadius: '3px', width: '22px', height: '22px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', lineHeight: '18px' }}
+              >+</button>
+              <button
+                onClick={handleZoomOut}
+                title="Control label size"
+                style={{ border: '1px solid #ccc', background: '#f5f5f5', borderRadius: '3px', width: '22px', height: '22px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', lineHeight: '18px' }}
+              >-</button>
+            </div>
+          )}
+
+          <span
+            onClick={() => setIsExpanded(!isExpanded)}
+            style={{ fontSize: 16, cursor: 'pointer', padding: '0 5px' }}
+          >
+            {isExpanded ? '▲' : '▼'}
+          </span>
+        </div>
+      </div>
+
+      {/* Content - Fix: Vertical scroll ONLY, Horizontal scroll for oversize images */}
+      {isExpanded && (
+        <div style={{
+          overflowY: 'auto',
+          overflowX: 'auto', // Allows horizontal scroll for oversized legends
+          padding: '0 5px 5px 0',
+          maxHeight: 'calc(100vh - 450px)'
+        }}>
+          {activeLayerNames.map((layerName) => {
+            const layerInfo = layers.find(l => l.name === layerName);
+            const imgSrc = legendUrls.get(layerName);
+            return (
+              <div key={layerName} style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px solid #ddd' }}>
+                <div style={{ fontWeight: 600, fontSize: 15, marginBottom: '8px', color: '#222' }}>
+                  {layerInfo?.title || layerName}
+                </div>
+                {/* Removed overflowX auto from inner div so parent handles the scroll */}
+                <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  {imgSrc && (
+                    <img
+                      src={imgSrc}
+                      alt={`Legend for ${layerName}`}
+                      style={{
+                        minWidth: '100%', // Ensures image acts as a base minimum width
+                        width: 'auto',   // Lets width grow naturally if image is huge
+                        maxWidth: 'none', // REMOVES the constraint, allowing real size for horizontal scroll
+                        height: 'auto',
+                        objectFit: 'contain',
+                        transform: `scale(${zoomLevel})`,
+                        transformOrigin: 'top left',
+                        marginBottom: `-${(zoomLevel - 1) * 50}px`
+                      }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- MAIN BASEMAP COMPONENT ---
 const BaseMap = () => {
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -560,7 +698,8 @@ const BaseMap = () => {
     <div style={{ position: 'relative', height: '100vh' }}>
       <div style={{ height: '100vh' }} ref={mapContainerRef} />
 
-      {showServerPanel ? (
+      {/* --- NEW LEFT SIDE CONTAINER (SERVER CONFIG + LEGEND TOGETHER) --- */}
+      {showServerPanel && (
         <div style={{
           position: 'absolute',
           top: 10,
@@ -570,201 +709,222 @@ const BaseMap = () => {
           borderRadius: 8,
           boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
           zIndex: 1000,
-          padding: 15,
-          maxHeight: '90vh',
-          overflowY: 'auto'
+          display: 'flex',
+          flexDirection: 'column',
+          maxHeight: '90vh'
         }}>
+
+          {/* 1. SERVER CONFIGURATION (TOP HALF - FLUSH) */}
           <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 10
+            padding: 15,
+            borderBottom: '1px solid #eee',
+            borderTopLeftRadius: 8,
+            borderTopRightRadius: 8,
+            backgroundColor: 'white'
           }}>
-            <div style={{ fontWeight: 'bold', fontSize: 14 }}>Server Configuration</div>
-            <button
-              onClick={() => setShowServerPanel(false)}
-              style={{
-                border: 'none',
-                background: 'none',
-                cursor: 'pointer',
-                fontSize: 16,
-                padding: '0 4px'
-              }}
-            >
-              ✕
-            </button>
-          </div>
-
-          {/* SERVER SEARCH */}
-          <div style={{ position: 'relative', marginBottom: 10 }}>
-            <span style={{
-              position: 'absolute',
-              left: 10,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              fontSize: 14,
-              color: '#999',
-              pointerEvents: 'none'
-            }}>
-              🔍
-            </span>
-            <input
-              type="text"
-              value={serverSearch}
-              onChange={(e) => {
-                setServerSearch(e.target.value);
-                setShowDropdown(true);
-              }}
-              onFocus={() => setShowDropdown(true)}
-              placeholder="Search servers"
-              style={{
-                width: '100%',
-                padding: '8px 10px 8px 32px',
-                borderRadius: 4,
-                border: '1px solid #ddd',
-                fontSize: 12,
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
-
-          {/* SERVER DROPDOWN / SEARCH RESULTS */}
-          {serverSearch && showDropdown ? (
             <div style={{
-              maxHeight: 200,
-              overflowY: 'auto',
-              marginBottom: 10,
-              border: '1px solid #ddd',
-              borderRadius: 4
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 10
             }}>
-              {filteredServers.map(server => (
-                <div
-                  key={server.label}
-                  onClick={() => handleServerChange(server)}
-                  style={{
-                    padding: '8px 10px',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    backgroundColor: selectedServer.label === server.label ? '#e3f2fd' : 'white',
-                    borderBottom: '1px solid #eee'
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor = '#f5f5f5';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor =
-                      selectedServer.label === server.label ? '#e3f2fd' : 'white';
-                  }}
-                >
-                  <div style={{ fontWeight: 500 }}>{server.label}</div>
-                  {server.url && (
-                    <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
-                      {server.url}
-                    </div>
-                  )}
-                </div>
-              ))}
-              {filteredServers.length === 0 && (
-                <div style={{ padding: '10px', fontSize: 12, color: '#999', textAlign: 'center' }}>
-                  No servers found
-                </div>
-              )}
+              <div style={{ fontWeight: 'bold', fontSize: 14 }}>Server Configuration</div>
+              <button
+                onClick={() => setShowServerPanel(false)}
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontSize: 16,
+                  padding: '0 4px'
+                }}
+              >
+                ✕
+              </button>
             </div>
-          ) : (
-            <select
-              value={selectedServer.label}
-              onChange={(e) => {
-                const server = SERVER_OPTIONS.find(s => s.label === e.target.value);
-                if (server) handleServerChange(server);
-              }}
-              style={{
-                width: '100%',
-                padding: '8px',
-                marginBottom: 10,
-                borderRadius: 4,
-                border: '1px solid #ddd',
-                boxSizing: 'border-box'
-              }}
-            >
-              {SERVER_OPTIONS.map(server => (
-                <option key={server.label} value={server.label}>
-                  {server.label}
-                </option>
-              ))}
-            </select>
-          )}
 
-          {selectedServer.label === 'Custom' && (
-            <div>
+            <div style={{ position: 'relative', marginBottom: 10 }}>
+              <span style={{
+                position: 'absolute',
+                left: 10,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: 14,
+                color: '#999',
+                pointerEvents: 'none'
+              }}>
+                🔍
+              </span>
               <input
                 type="text"
-                value={customUrl}
-                onChange={(e) => setCustomUrl(e.target.value)}
-                placeholder="Paste your WMS or WFS URL here..."
+                value={serverSearch}
+                onChange={(e) => {
+                  setServerSearch(e.target.value);
+                  setShowDropdown(true);
+                }}
+                onFocus={() => setShowDropdown(true)}
+                placeholder="Search servers"
                 style={{
                   width: '100%',
-                  padding: '8px',
-                  marginBottom: 5,
+                  padding: '8px 10px 8px 32px',
                   borderRadius: 4,
                   border: '1px solid #ddd',
                   fontSize: 12,
                   boxSizing: 'border-box'
                 }}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') handleCustomUrlSubmit();
-                }}
               />
-              <button
-                onClick={handleCustomUrlSubmit}
+            </div>
+
+            {serverSearch && showDropdown ? (
+              <div style={{
+                maxHeight: 200,
+                overflowY: 'auto',
+                marginBottom: 10,
+                border: '1px solid #ddd',
+                borderRadius: 4
+              }}>
+                {filteredServers.map(server => (
+                  <div
+                    key={server.label}
+                    onClick={() => handleServerChange(server)}
+                    style={{
+                      padding: '8px 10px',
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      backgroundColor: selectedServer.label === server.label ? '#e3f2fd' : 'white',
+                      borderBottom: '1px solid #eee'
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.target as HTMLElement).style.backgroundColor = '#f5f5f5';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.target as HTMLElement).style.backgroundColor =
+                        selectedServer.label === server.label ? '#e3f2fd' : 'white';
+                    }}
+                  >
+                    <div style={{ fontWeight: 500 }}>{server.label}</div>
+                    {server.url && (
+                      <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
+                        {server.url}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {filteredServers.length === 0 && (
+                  <div style={{ padding: '10px', fontSize: 12, color: '#999', textAlign: 'center' }}>
+                    No servers found
+                  </div>
+                )}
+              </div>
+            ) : (
+              <select
+                value={selectedServer.label}
+                onChange={(e) => {
+                  const server = SERVER_OPTIONS.find(s => s.label === e.target.value);
+                  if (server) handleServerChange(server);
+                }}
                 style={{
                   width: '100%',
                   padding: '8px',
-                  backgroundColor: '#2196F3',
-                  color: 'white',
-                  border: 'none',
+                  marginBottom: 10,
                   borderRadius: 4,
-                  cursor: 'pointer',
-                  fontWeight: 'bold'
+                  border: '1px solid #ddd',
+                  boxSizing: 'border-box'
                 }}
               >
-                Connect to Custom Server
-              </button>
-            </div>
-          )}
+                {SERVER_OPTIONS.map(server => (
+                  <option key={server.label} value={server.label}>
+                    {server.label}
+                  </option>
+                ))}
+              </select>
+            )}
 
-          {geoserverUrl && (
-            <div style={{ marginTop: 10 }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 11,
-                color: '#666',
-                wordBreak: 'break-all',
-                padding: '8px',
-                backgroundColor: '#f5f5f5',
-                borderRadius: 4,
-                marginBottom: 5
-              }}>
+            {selectedServer.label === 'Custom' && (
+              <div>
+                <input
+                  type="text"
+                  value={customUrl}
+                  onChange={(e) => setCustomUrl(e.target.value)}
+                  placeholder="Paste your WMS or WFS URL here..."
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    marginBottom: 5,
+                    borderRadius: 4,
+                    border: '1px solid #ddd',
+                    fontSize: 12,
+                    boxSizing: 'border-box'
+                  }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') handleCustomUrlSubmit();
+                  }}
+                />
+                <button
+                  onClick={handleCustomUrlSubmit}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    backgroundColor: '#2196F3',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Connect to Custom Server
+                </button>
+              </div>
+            )}
+
+            {geoserverUrl && (
+              <div style={{ marginTop: 10 }}>
                 <div style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  backgroundColor: getStatusColor(),
-                  flexShrink: 0
-                }} />
-                <span>{geoserverUrl}</span>
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 11,
+                  color: '#666',
+                  wordBreak: 'break-all',
+                  padding: '8px',
+                  backgroundColor: '#f5f5f5',
+                  borderRadius: 4,
+                  marginBottom: 5
+                }}>
+                  <div style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    backgroundColor: getStatusColor(),
+                    flexShrink: 0
+                  }} />
+                  <span>{geoserverUrl}</span>
+                </div>
+                <div style={{ fontSize: 11, color: getStatusColor(), fontWeight: 'bold' }}>
+                  {connectionStatus === 'connected' && `✓ Connected ${needsProxy ? '(proxy)' : '(direct)'}`}
+                  {connectionStatus === 'connecting' && '⟳ Connecting...'}
+                  {connectionStatus === 'error' && '✗ Connection failed'}
+                  {connectionStatus === 'idle' && 'Not connected'}
+                </div>
               </div>
-              <div style={{ fontSize: 11, color: getStatusColor(), fontWeight: 'bold' }}>
-                {connectionStatus === 'connected' && `✓ Connected ${needsProxy ? '(proxy)' : '(direct)'}`}
-                {connectionStatus === 'connecting' && '⟳ Connecting...'}
-                {connectionStatus === 'error' && '✗ Connection failed'}
-                {connectionStatus === 'idle' && 'Not connected'}
-              </div>
-            </div>
+            )}
+          </div>
+
+          {/* 2. LEGEND BOX (BOTTOM HALF - DIRECTLY FLUSH) */}
+          {isReady && geoserverUrl && activeLayers.size > 0 && (
+            <LegendBox
+              activeLayers={activeLayers}
+              baseUrl={baseUrl}
+              needsProxy={needsProxy}
+              layers={layers}
+            />
           )}
         </div>
-      ) : (
+      )}
+
+      {/* --- FLOATING SERVERS BUTTON (WHEN PANEL IS CLOSED) --- */}
+      {!showServerPanel && (
         <button
           onClick={() => setShowServerPanel(true)}
           style={{
@@ -787,6 +947,7 @@ const BaseMap = () => {
         </button>
       )}
 
+      {/* --- RIGHT SIDE LAYER PANEL --- */}
       {isReady && geoserverUrl && (
         <div style={{
           position: 'absolute',
@@ -802,7 +963,6 @@ const BaseMap = () => {
           flexDirection: 'column'
         }}>
 
-          {/* --- HEADER WITH TABS --- */}
           <div style={{
             padding: '0',
             borderBottom: '1px solid #eee',
