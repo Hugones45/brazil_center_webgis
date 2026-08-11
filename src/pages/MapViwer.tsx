@@ -114,7 +114,6 @@ const LegendBox = ({ activeLayers, baseUrl, needsProxy, layers }: LegendBoxProps
             flexDirection: 'column',
             boxSizing: 'border-box'
         }}>
-            {/* Header */}
             <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -131,7 +130,6 @@ const LegendBox = ({ activeLayers, baseUrl, needsProxy, layers }: LegendBoxProps
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {/* ZOOM CONTROLS WITH TOOLTIP */}
                     {isExpanded && (
                         <div style={{ display: 'flex', gap: '2px' }}>
                             <button
@@ -156,11 +154,10 @@ const LegendBox = ({ activeLayers, baseUrl, needsProxy, layers }: LegendBoxProps
                 </div>
             </div>
 
-            {/* Content - Fix: Vertical scroll ONLY, Horizontal scroll for oversize images */}
             {isExpanded && (
                 <div style={{
                     overflowY: 'auto',
-                    overflowX: 'auto', // Allows horizontal scroll for oversized legends
+                    overflowX: 'auto',
                     padding: '0 5px 5px 0',
                     maxHeight: 'calc(100vh - 450px)'
                 }}>
@@ -172,16 +169,15 @@ const LegendBox = ({ activeLayers, baseUrl, needsProxy, layers }: LegendBoxProps
                                 <div style={{ fontWeight: 600, fontSize: 15, marginBottom: '8px', color: '#222' }}>
                                     {layerInfo?.title || layerName}
                                 </div>
-                                {/* Removed overflowX auto from inner div so parent handles the scroll */}
                                 <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                                     {imgSrc && (
                                         <img
                                             src={imgSrc}
                                             alt={`Legenda para ${layerName}`}
                                             style={{
-                                                minWidth: '100%', // Ensures image acts as a base minimum width
-                                                width: 'auto',   // Lets width grow naturally if image is huge
-                                                maxWidth: 'none', // REMOVES the constraint, allowing real size for horizontal scroll
+                                                minWidth: '100%',
+                                                width: 'auto',
+                                                maxWidth: 'none',
                                                 height: 'auto',
                                                 objectFit: 'contain',
                                                 transform: `scale(${zoomLevel})`,
@@ -222,15 +218,12 @@ const BaseMap = () => {
     const [showServerPanel, setShowServerPanel] = useState(true);
     const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
 
-    // Search states
     const [serverSearch, setServerSearch] = useState('');
     const [layerSearch, setLayerSearch] = useState('');
     const [showDropdown, setShowDropdown] = useState(false);
 
-    // --- Tab State ---
     const [activeTab, setActiveTab] = useState<'all' | 'selected'>('all');
 
-    // --- Attribute Table State ---
     const [showTable, setShowTable] = useState(false);
     const [selectedLayerForTable, setSelectedLayerForTable] = useState<string | null>(null);
     const [tableData, setTableData] = useState<FeatureProperties[]>([]);
@@ -238,7 +231,13 @@ const BaseMap = () => {
     const [loadingTable, setLoadingTable] = useState(false);
     const [tableError, setTableError] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(0);
-    const rowsPerPage = 50;
+    const [rowsPerPage, setRowsPerPage] = useState(50);
+
+    const [tableHeight, setTableHeight] = useState(35);
+    const tableRef = useRef<HTMLDivElement>(null);
+    const isDraggingRef = useRef(false);
+    const dragStartYRef = useRef(0);
+    const startHeightRef = useRef(0);
 
     const currentServerLayersRef = useRef<Set<string>>(new Set());
 
@@ -287,6 +286,38 @@ const BaseMap = () => {
         currentServerLayersRef.current.clear();
     }, []);
 
+    const handleDragStart = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        isDraggingRef.current = true;
+        dragStartYRef.current = e.clientY;
+        startHeightRef.current = tableHeight;
+
+        document.addEventListener('mousemove', handleDragMove);
+        document.addEventListener('mouseup', handleDragEnd);
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+    }, [tableHeight]);
+
+    const handleDragMove = useCallback((e: MouseEvent) => {
+        if (!isDraggingRef.current) return;
+
+        const deltaY = dragStartYRef.current - e.clientY;
+        const viewportHeight = window.innerHeight;
+        const deltaPercent = (deltaY / viewportHeight) * 100;
+
+        const newHeight = startHeightRef.current + deltaPercent;
+        const clampedHeight = Math.min(Math.max(newHeight, 20), 85);
+        setTableHeight(clampedHeight);
+    }, []);
+
+    const handleDragEnd = useCallback(() => {
+        isDraggingRef.current = false;
+        document.removeEventListener('mousemove', handleDragMove);
+        document.removeEventListener('mouseup', handleDragEnd);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    }, [handleDragMove]);
+
     useEffect(() => {
         if (!mapContainerRef.current) return;
 
@@ -308,6 +339,8 @@ const BaseMap = () => {
         return () => {
             theBaseMap.remove();
             mapRef.current = null;
+            document.removeEventListener('mousemove', handleDragMove);
+            document.removeEventListener('mouseup', handleDragEnd);
         };
     }, []);
 
@@ -517,7 +550,6 @@ const BaseMap = () => {
             }
             currentServerLayersRef.current.delete(layerName);
 
-            // Close table if removing the layer being viewed
             if (selectedLayerForTable === layerName) {
                 setShowTable(false);
                 setSelectedLayerForTable(null);
@@ -594,8 +626,6 @@ const BaseMap = () => {
             if (data.features && data.features.length > 0) {
                 const props = data.features.map((feature: any) => feature.properties);
                 setTableData(props);
-
-                // Extract column names from first feature
                 const columns = Object.keys(props[0]);
                 setTableColumns(columns);
             } else {
@@ -638,7 +668,6 @@ const BaseMap = () => {
             const response = needsProxy ? await proxyFetch(url) : await fetch(url);
 
             if (!response.ok) {
-                // If KML fails with WFS 2.0.0, try WFS 1.1.0
                 if (format === 'kml') {
                     const altUrl = `${baseUrl}?service=WFS&version=1.1.0&request=GetFeature&typeName=${layerName}&outputFormat=KML&srsName=EPSG:4674`;
                     const altResponse = needsProxy ? await proxyFetch(altUrl) : await fetch(altUrl);
@@ -688,6 +717,13 @@ const BaseMap = () => {
         }
     };
 
+    const handleRowsPerPageChange = (newRowsPerPage: number) => {
+        const firstRowIndex = currentPage * rowsPerPage;
+        const newPage = Math.floor(firstRowIndex / newRowsPerPage);
+        setRowsPerPage(newRowsPerPage);
+        setCurrentPage(newPage);
+    };
+
     const totalPages = Math.ceil(tableData.length / rowsPerPage);
     const paginatedData = tableData.slice(
         currentPage * rowsPerPage,
@@ -698,7 +734,6 @@ const BaseMap = () => {
         <div style={{ position: 'relative', height: '100vh' }}>
             <div style={{ height: '100vh' }} ref={mapContainerRef} />
 
-            {/* --- NEW LEFT SIDE CONTAINER (SERVER CONFIG + LEGEND TOGETHER) --- */}
             {showServerPanel && (
                 <div style={{
                     position: 'absolute',
@@ -713,8 +748,6 @@ const BaseMap = () => {
                     flexDirection: 'column',
                     maxHeight: '90vh'
                 }}>
-
-                    {/* 1. SERVER CONFIGURATION (TOP HALF - FLUSH) */}
                     <div style={{
                         padding: 15,
                         borderBottom: '1px solid #eee',
@@ -911,7 +944,6 @@ const BaseMap = () => {
                         )}
                     </div>
 
-                    {/* 2. LEGEND BOX (BOTTOM HALF - DIRECTLY FLUSH) */}
                     {isReady && geoserverUrl && activeLayers.size > 0 && (
                         <LegendBox
                             activeLayers={activeLayers}
@@ -923,7 +955,6 @@ const BaseMap = () => {
                 </div>
             )}
 
-            {/* --- FLOATING SERVERS BUTTON (WHEN PANEL IS CLOSED) --- */}
             {!showServerPanel && (
                 <button
                     onClick={() => setShowServerPanel(true)}
@@ -947,7 +978,6 @@ const BaseMap = () => {
                 </button>
             )}
 
-            {/* --- RIGHT SIDE LAYER PANEL --- */}
             {isReady && geoserverUrl && (
                 <div style={{
                     position: 'absolute',
@@ -962,7 +992,6 @@ const BaseMap = () => {
                     display: 'flex',
                     flexDirection: 'column'
                 }}>
-
                     <div style={{
                         padding: '0',
                         borderBottom: '1px solid #eee',
@@ -1057,7 +1086,6 @@ const BaseMap = () => {
                         )}
                     </div>
 
-                    {/* LAYER SEARCH */}
                     <div style={{ padding: '10px', borderBottom: '1px solid #eee' }}>
                         <div style={{ position: 'relative' }}>
                             <span style={{
@@ -1112,7 +1140,6 @@ const BaseMap = () => {
                         )}
                     </div>
 
-                    {/* LAYERS LIST */}
                     <div style={{ overflowY: 'auto', flex: 1, padding: '10px' }}>
                         {loading && <div style={{ padding: '10px', color: '#666' }}>Carregando camadas...</div>}
 
@@ -1136,7 +1163,6 @@ const BaseMap = () => {
                             </div>
                         )}
 
-                        {/* ALL LAYERS TAB */}
                         {!loading && !error && activeTab === 'all' && (
                             <>
                                 {filteredLayers.map((layer) => (
@@ -1258,7 +1284,6 @@ const BaseMap = () => {
                             </>
                         )}
 
-                        {/* SELECTED LAYERS TAB */}
                         {!loading && !error && activeTab === 'selected' && (
                             <>
                                 {activeLayers.size === 0 ? (
@@ -1432,29 +1457,70 @@ const BaseMap = () => {
                 </div>
             )}
 
-            {/* ATTRIBUTE TABLE - Bottom Panel like ArcGIS Pro */}
+            {/* ATTRIBUTE TABLE - Pagination buttons in the HEADER next to feições info */}
             {showTable && selectedLayerForTable && (
-                <div style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    height: '35vh',
-                    backgroundColor: 'white',
-                    borderTop: '3px solid #2196F3',
-                    boxShadow: '0 -4px 15px rgba(0,0,0,0.2)',
-                    zIndex: 999,
-                    display: 'flex',
-                    flexDirection: 'column'
-                }}>
-                    {/* Table Header */}
+                <div
+                    ref={tableRef}
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: `${tableHeight}vh`,
+                        backgroundColor: 'white',
+                        borderTop: '3px solid #2196F3',
+                        boxShadow: '0 -8px 30px rgba(0,0,0,0.35)',
+                        zIndex: 9999,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        padding: '0 30px',
+                        boxSizing: 'border-box'
+                    }}
+                >
+                    {/* Drag Handle */}
+                    <div
+                        onMouseDown={handleDragStart}
+                        style={{
+                            position: 'absolute',
+                            top: -8,
+                            left: 0,
+                            right: 0,
+                            height: 16,
+                            cursor: 'row-resize',
+                            zIndex: 10000,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        <div style={{
+                            width: 60,
+                            height: 5,
+                            backgroundColor: '#bbb',
+                            borderRadius: 3,
+                            transition: 'background-color 0.2s'
+                        }}
+                            onMouseEnter={(e) => {
+                                (e.target as HTMLElement).style.backgroundColor = '#2196F3';
+                            }}
+                            onMouseLeave={(e) => {
+                                (e.target as HTMLElement).style.backgroundColor = '#bbb';
+                            }}
+                        />
+                    </div>
+
+                    {/* Table Header - With pagination buttons integrated */}
                     <div style={{
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        padding: '10px 15px',
+                        padding: '10px 0',
                         backgroundColor: '#f8f9fa',
-                        borderBottom: '1px solid #e0e0e0'
+                        borderBottom: '1px solid #e0e0e0',
+                        marginTop: '4px',
+                        flexShrink: 0,
+                        flexWrap: 'wrap',
+                        gap: 8
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div style={{ fontWeight: 'bold', fontSize: 14, color: '#333' }}>
@@ -1469,32 +1535,176 @@ const BaseMap = () => {
                             }}>
                                 {layers.find(l => l.name === selectedLayerForTable)?.title || selectedLayerForTable}
                             </div>
-                            <div style={{ fontSize: 11, color: '#888' }}>
-                                {tableData.length} feições
-                            </div>
                         </div>
-                        <button
-                            onClick={() => {
-                                setShowTable(false);
-                                setSelectedLayerForTable(null);
-                            }}
-                            style={{
-                                padding: '6px 15px',
-                                fontSize: 12,
-                                backgroundColor: '#EF5350',
-                                color: 'white',
-                                border: 'none',
+
+                        {/* PAGINATION CONTROLS - Right side of header */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {/* Feições count + pages info */}
+                            <div style={{
+                                fontSize: 11,
+                                color: '#333',
+                                backgroundColor: '#f0f0f0',
+                                padding: '4px 10px',
                                 borderRadius: 4,
-                                cursor: 'pointer',
-                                fontWeight: 'bold'
-                            }}
-                        >
-                            ✕ Fechar Tabela
-                        </button>
+                                fontWeight: 500
+                            }}>
+                                {tableData.length} feições ({totalPages} páginas)
+                            </div>
+
+                            {/* Rows per page selector */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ fontSize: 10, color: '#888' }}>por pág:</span>
+                                <select
+                                    value={rowsPerPage}
+                                    onChange={(e) => handleRowsPerPageChange(Number(e.target.value))}
+                                    style={{
+                                        padding: '3px 4px',
+                                        fontSize: 10,
+                                        border: '1px solid #ddd',
+                                        borderRadius: 3,
+                                        cursor: 'pointer',
+                                        backgroundColor: 'white'
+                                    }}
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={25}>25</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                    <option value={200}>200</option>
+                                    <option value={500}>500</option>
+                                </select>
+                            </div>
+
+                            {/* Page navigation buttons */}
+                            <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                                <button
+                                    onClick={() => setCurrentPage(0)}
+                                    disabled={currentPage === 0}
+                                    title="Primeira página"
+                                    style={{
+                                        padding: '4px 6px',
+                                        fontSize: 11,
+                                        backgroundColor: currentPage === 0 ? '#e0e0e0' : '#2196F3',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: 3,
+                                        cursor: currentPage === 0 ? 'not-allowed' : 'pointer',
+                                        lineHeight: 1
+                                    }}
+                                >
+                                    ⏮
+                                </button>
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                                    disabled={currentPage === 0}
+                                    title="Página anterior"
+                                    style={{
+                                        padding: '4px 6px',
+                                        fontSize: 11,
+                                        backgroundColor: currentPage === 0 ? '#e0e0e0' : '#2196F3',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: 3,
+                                        cursor: currentPage === 0 ? 'not-allowed' : 'pointer',
+                                        lineHeight: 1
+                                    }}
+                                >
+                                    ◀
+                                </button>
+
+                                {/* Page input */}
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={totalPages}
+                                    value={currentPage + 1}
+                                    onChange={(e) => {
+                                        const val = parseInt(e.target.value);
+                                        if (val >= 1 && val <= totalPages) {
+                                            setCurrentPage(val - 1);
+                                        }
+                                    }}
+                                    title="Ir para página"
+                                    style={{
+                                        width: '40px',
+                                        padding: '3px 4px',
+                                        fontSize: 11,
+                                        border: '1px solid #2196F3',
+                                        borderRadius: 3,
+                                        textAlign: 'center',
+                                        fontWeight: 'bold',
+                                        color: '#2196F3'
+                                    }}
+                                />
+
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                                    disabled={currentPage >= totalPages - 1}
+                                    title="Próxima página"
+                                    style={{
+                                        padding: '4px 6px',
+                                        fontSize: 11,
+                                        backgroundColor: currentPage >= totalPages - 1 ? '#e0e0e0' : '#2196F3',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: 3,
+                                        cursor: currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                                        lineHeight: 1
+                                    }}
+                                >
+                                    ▶
+                                </button>
+                                <button
+                                    onClick={() => setCurrentPage(totalPages - 1)}
+                                    disabled={currentPage >= totalPages - 1}
+                                    title="Última página"
+                                    style={{
+                                        padding: '4px 6px',
+                                        fontSize: 11,
+                                        backgroundColor: currentPage >= totalPages - 1 ? '#e0e0e0' : '#2196F3',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: 3,
+                                        cursor: currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                                        lineHeight: 1
+                                    }}
+                                >
+                                    ⏭
+                                </button>
+                            </div>
+
+                            {/* Close button */}
+                            <button
+                                onClick={() => {
+                                    setShowTable(false);
+                                    setSelectedLayerForTable(null);
+                                }}
+                                style={{
+                                    padding: '6px 15px',
+                                    fontSize: 12,
+                                    backgroundColor: '#EF5350',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: 4,
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold',
+                                    marginLeft: 8
+                                }}
+                            >
+                                ✕ Fechar Tabela
+                            </button>
+                        </div>
                     </div>
 
                     {/* Table Content */}
-                    <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+                    <div style={{
+                        flex: 1,
+                        overflow: 'auto',
+                        position: 'relative',
+                        minHeight: 0,
+                        paddingBottom: '60px' // <--- ADD THIS LINE
+
+                    }}>
                         {loadingTable ? (
                             <div style={{
                                 display: 'flex',
@@ -1518,164 +1728,118 @@ const BaseMap = () => {
                                 {tableError}
                             </div>
                         ) : (
-                            <table style={{
+                            <div style={{
+                                overflowX: 'scroll',
+                                overflowY: 'auto',
+                                height: '100%',
                                 width: '100%',
-                                borderCollapse: 'collapse',
-                                fontSize: 11
                             }}>
-                                <thead>
-                                    <tr style={{
-                                        position: 'sticky',
-                                        top: 0,
-                                        backgroundColor: '#f0f0f0',
-                                        zIndex: 1
-                                    }}>
-                                        <th style={{
-                                            padding: '8px 12px',
-                                            borderBottom: '2px solid #2196F3',
-                                            backgroundColor: '#e3f2fd',
-                                            textAlign: 'left',
-                                            fontWeight: 'bold',
-                                            color: '#333',
-                                            minWidth: '60px'
+                                <table style={{
+                                    width: 'max-content',
+                                    minWidth: '100%',
+                                    borderCollapse: 'collapse',
+                                    fontSize: 11
+                                }}>
+                                    <thead>
+                                        <tr style={{
+                                            position: 'sticky',
+                                            top: 0,
+                                            backgroundColor: '#f0f0f0',
+                                            zIndex: 1,
                                         }}>
-                                            #
-                                        </th>
-                                        {tableColumns.map(column => (
-                                            <th key={column} style={{
+                                            <th style={{
                                                 padding: '8px 12px',
                                                 borderBottom: '2px solid #2196F3',
                                                 backgroundColor: '#e3f2fd',
                                                 textAlign: 'left',
                                                 fontWeight: 'bold',
                                                 color: '#333',
-                                                minWidth: '120px',
-                                                whiteSpace: 'nowrap'
+                                                minWidth: '60px',
+                                                position: 'sticky',
+                                                left: 0,
+                                                zIndex: 2
                                             }}>
-                                                {column}
+                                                #
                                             </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {paginatedData.map((row, index) => (
-                                        <tr
-                                            key={index}
-                                            style={{
-                                                backgroundColor: index % 2 === 0 ? 'white' : '#fafafa',
-                                                borderBottom: '1px solid #e0e0e0'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                (e.currentTarget as HTMLElement).style.backgroundColor = '#e3f2fd';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                (e.currentTarget as HTMLElement).style.backgroundColor = index % 2 === 0 ? 'white' : '#fafafa';
-                                            }}
-                                        >
-                                            <td style={{
-                                                padding: '6px 12px',
-                                                color: '#999',
-                                                fontWeight: 'bold'
-                                            }}>
-                                                {currentPage * rowsPerPage + index + 1}
-                                            </td>
                                             {tableColumns.map(column => (
-                                                <td key={column} style={{
-                                                    padding: '6px 12px',
+                                                <th key={column} style={{
+                                                    padding: '8px 12px',
+                                                    borderBottom: '2px solid #2196F3',
+                                                    backgroundColor: '#e3f2fd',
+                                                    textAlign: 'left',
+                                                    fontWeight: 'bold',
                                                     color: '#333',
-                                                    maxWidth: '300px',
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    whiteSpace: 'nowrap'
+                                                    minWidth: '150px',
+                                                    whiteSpace: 'nowrap',
                                                 }}>
-                                                    {row[column] !== null && row[column] !== undefined ? String(row[column]) : 'NULO'}
-                                                </td>
+                                                    {column}
+                                                </th>
                                             ))}
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {paginatedData.map((row, index) => (
+                                            <tr
+                                                key={index}
+                                                style={{
+                                                    backgroundColor: index % 2 === 0 ? 'white' : '#fafafa',
+                                                    borderBottom: '1px solid #e0e0e0'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    (e.currentTarget as HTMLElement).style.backgroundColor = '#e3f2fd';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    (e.currentTarget as HTMLElement).style.backgroundColor = index % 2 === 0 ? 'white' : '#fafafa';
+                                                }}
+                                            >
+                                                <td style={{
+                                                    padding: '6px 12px',
+                                                    color: '#999',
+                                                    fontWeight: 'bold',
+                                                    position: 'sticky',
+                                                    left: 0,
+                                                    backgroundColor: index % 2 === 0 ? 'white' : '#fafafa',
+                                                    zIndex: 0
+                                                }}>
+                                                    {currentPage * rowsPerPage + index + 1}
+                                                </td>
+                                                {tableColumns.map(column => (
+                                                    <td key={column} style={{
+                                                        padding: '6px 12px',
+                                                        color: '#333',
+                                                        maxWidth: '300px',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                        whiteSpace: 'nowrap'
+                                                    }}>
+                                                        {row[column] !== null && row[column] !== undefined ? String(row[column]) : 'NULO'}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </div>
 
-                    {/* Table Footer with Pagination */}
+                    {/* Bottom footer - Summary only */}
                     {!loadingTable && !tableError && tableData.length > 0 && (
                         <div style={{
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center',
-                            padding: '8px 15px',
+                            padding: '6px 0',
                             backgroundColor: '#f8f9fa',
                             borderTop: '1px solid #e0e0e0',
-                            fontSize: 11
+                            fontSize: 11,
+                            flexShrink: 0
                         }}>
                             <div style={{ color: '#666' }}>
                                 Mostrando {currentPage * rowsPerPage + 1} - {Math.min((currentPage + 1) * rowsPerPage, tableData.length)} de {tableData.length} feições
                             </div>
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                <button
-                                    onClick={() => setCurrentPage(0)}
-                                    disabled={currentPage === 0}
-                                    style={{
-                                        padding: '4px 8px',
-                                        fontSize: 11,
-                                        backgroundColor: currentPage === 0 ? '#e0e0e0' : '#2196F3',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: 3,
-                                        cursor: currentPage === 0 ? 'not-allowed' : 'pointer'
-                                    }}
-                                >
-                                    ⏮ Primeira
-                                </button>
-                                <button
-                                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-                                    disabled={currentPage === 0}
-                                    style={{
-                                        padding: '4px 8px',
-                                        fontSize: 11,
-                                        backgroundColor: currentPage === 0 ? '#e0e0e0' : '#2196F3',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: 3,
-                                        cursor: currentPage === 0 ? 'not-allowed' : 'pointer'
-                                    }}
-                                >
-                                    ◀ Anterior
-                                </button>
-                                <span style={{ color: '#666', fontWeight: 'bold' }}>
-                                    {currentPage + 1} / {totalPages}
-                                </span>
-                                <button
-                                    onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
-                                    disabled={currentPage >= totalPages - 1}
-                                    style={{
-                                        padding: '4px 8px',
-                                        fontSize: 11,
-                                        backgroundColor: currentPage >= totalPages - 1 ? '#e0e0e0' : '#2196F3',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: 3,
-                                        cursor: currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer'
-                                    }}
-                                >
-                                    Próxima ▶
-                                </button>
-                                <button
-                                    onClick={() => setCurrentPage(totalPages - 1)}
-                                    disabled={currentPage >= totalPages - 1}
-                                    style={{
-                                        padding: '4px 8px',
-                                        fontSize: 11,
-                                        backgroundColor: currentPage >= totalPages - 1 ? '#e0e0e0' : '#2196F3',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: 3,
-                                        cursor: currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer'
-                                    }}
-                                >
-                                    Última ⏭
-                                </button>
+                            <div style={{ color: '#888', fontSize: 10 }}>
+                                Página {currentPage + 1} de {totalPages}
                             </div>
                         </div>
                     )}
