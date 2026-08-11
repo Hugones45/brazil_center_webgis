@@ -1,6 +1,5 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import Header from './components/Header';
-import Navbar from './components/NaVbar';
 import MapViewer from './pages/MapViwer';
 import DataSource from './pages/DataSource';
 
