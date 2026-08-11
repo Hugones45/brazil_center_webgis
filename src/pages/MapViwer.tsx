@@ -613,7 +613,7 @@ const BaseMap = () => {
         setCurrentPage(0);
 
         try {
-            const url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&count=1000&srsName=EPSG:4674`;
+            const url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674`;;
 
             const response = needsProxy ? await proxyFetch(url) : await fetch(url);
 
