@@ -3433,9 +3433,9 @@ const BaseMap = () => {
 
     const getStatusColor = () => {
         switch (connectionStatus) {
-            case 'connected': return '#EC6A2B';
+            case 'connected': return '#52bc2f';
             case 'connecting': return '#FFA726';
-            case 'error': return '#EF5350';
+            case 'error': return '#e6302d';
             default: return '#9E9E9E';
         }
     };
@@ -3465,7 +3465,7 @@ const BaseMap = () => {
             {showServerPanel && (
                 <div style={{
                     position: 'absolute',
-                    top: 80,
+                    top: 10,
                     left: 10,
                     width: 350,
                     backgroundColor: 'white',
