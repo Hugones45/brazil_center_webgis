@@ -1,7 +1,10 @@
 // BaseMap.tsx
 import mapboxgl from "mapbox-gl"
 import 'mapbox-gl/dist/mapbox-gl.css';
+import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import MapboxDraw from "@mapbox/mapbox-gl-draw";
+
 
 interface WMSLayer {
     name: string;
@@ -17,50 +20,50 @@ const CORS_PROXY = 'https://corsproxy.io/?';
 
 // --- ORGANIZED SERVER LIST ---
 const SERVER_OPTIONS = [
-    { label: 'IDE SISEMA (MG)', url: 'https://geoserver.meioambiente.mg.gov.br/ows' },
-    { label: 'EMBRAPA', url: 'https://geoinfo.dados.embrapa.br/geoserver/ows' },
-    { label: 'INPE', url: 'https://terrabrasilis.dpi.inpe.br/geoserver/ows' },
-    { label: 'IBGE - Malhas Territoriais', url: 'https://geoservicos.ibge.gov.br/geoserver/ows' },
-    { label: 'IBGE - CENSO 2022', url: 'https://geoservicoscenso2022.ibge.gov.br/geoserver/censo2022/ows' },
-    { label: 'IBGE - ODS', url: 'https://geoservicos.ibge.gov.br/geoserver/ODS/ows' },
-    { label: 'ANATEL', url: 'https://sistemas.anatel.gov.br/geoserver/ows' },
-    { label: 'ANP', url: 'https://gishub.anp.gov.br/geoserver/ows' },
-    { label: 'ANTT', url: 'https://geoservicos.inde.gov.br/geoserver/ANTT/ows' },
-    { label: 'BNDES', url: 'https://geoservicos.inde.gov.br/geoserver/BNDES/ows' },
-    { label: 'Censipam', url: 'https://panorama.sipam.gov.br/geoserver/publico/ows' },
-    { label: 'CPRM / SGB', url: 'https://geoservicos.sgb.gov.br/geoserver/geologia/ows' },
-    { label: 'DNIT', url: 'https://geoservicos.inde.gov.br/geoserver/DNIT/ows' },
-    { label: 'EPE', url: 'https://geoservicos.inde.gov.br/geoserver/EPE/ows' },
-    { label: 'FUNAI', url: 'https://geoserver.funai.gov.br/geoserver/ows' },
-    { label: 'FUNAI/CMR', url: 'https://cmr.funai.gov.br/geoserver/ows' },
-    { label: 'ICA', url: 'https://geoaissweb.decea.gov.br/geoserver/ICA/ows' },
-    { label: 'ICMBIO', url: 'https://geoservicos.inde.gov.br/geoserver/ICMBio/ows' },
-    { label: 'IPHAN', url: 'https://geoserver.iphan.gov.br/geoserver/ows' },
-    { label: 'MB/COMPAAz', url: 'https://geoservicos.inde.gov.br/geoserver/COMPAAz/ows' },
-    { label: 'MB/DPC', url: 'https://geoservicos.inde.gov.br/geoserver/DPC/ows' },
-    { label: 'MB/DPHDM', url: 'https://geoservicos.inde.gov.br/geoserver/DPHDM/ows' },
-    { label: 'MDIC', url: 'https://geoservicos.inde.gov.br/geoserver/MDIC/ows' },
-    { label: 'MMA', url: 'https://geoservicos.inde.gov.br/geoserver/MMA/ows' },
-    { label: 'MPA', url: 'https://geoservicos.inde.gov.br/geoserver/MPA/ows' },
-    { label: 'MPO', url: 'https://geoservicos.inde.gov.br/geoserver/MPOG/ows' },
-    { label: 'MS/IDE-MS', url: 'https://ide.saude.gov.br/geoserver/ows' },
-    { label: 'MTR', url: 'https://geoservicos.inde.gov.br/geoserver/MInfra/ows' },
-    { label: 'MTUR', url: 'https://geoservicos.inde.gov.br/geoserver/MTU/ows' },
-    { label: 'PGGM', url: 'https://geoservicos.inde.gov.br/geoserver/PGGM/ows' },
-    { label: 'SPU', url: 'https://geoservicos.inde.gov.br/geoserver/SPU/ows' },
-    { label: 'VALEC', url: 'https://geoservicos.inde.gov.br/geoserver/VALEC/ows' },
+    // { label: 'ANATEL - Agência Nacional de Telecomunicações', url: 'https://sistemas.anatel.gov.br/geoserver/ows' },
+    { label: 'ANP - Agência Nacional do Petróleo, Gás Natural e Biocombustíveis', url: 'https://gishub.anp.gov.br/geoserver/ows' },
+    { label: 'ANTT - Agência Nacional de Transportes Terrestres', url: 'https://geoservicos.inde.gov.br/geoserver/ANTT/ows' },
+    { label: 'BNDES - Banco Nacional de Desenvolvimento Econômico e Social', url: 'https://geoservicos.inde.gov.br/geoserver/BNDES/ows' },
+    { label: 'Censipam - Centro Gestor e Operacional do Sistema de Proteção da Amazônia', url: 'https://panorama.sipam.gov.br/geoserver/publico/ows' },
+    { label: 'CPRM / SGB - Serviço Geológico do Brasil', url: 'https://geoservicos.sgb.gov.br/geoserver/geologia/ows' },
     { label: 'DataGeo - São Paulo', url: 'https://datageo.ambiente.sp.gov.br/geoserver/ows' },
-    { label: 'IDE-GEOBASES (ES)', url: 'https://ide.geobases.es.gov.br/geoserver/ows' },
-    { label: 'INEA (RJ)', url: 'https://geoservicos.inde.gov.br/geoserver/INEA/ows' },
+    { label: 'DNIT - Departamento Nacional de Infraestrutura de Transportes', url: 'https://geoservicos.inde.gov.br/geoserver/DNIT/ows' },
+    // { label: 'EMBRAPA - Empresa Brasileira de Pesquisa Agropecuária', url: 'https://geoinfo.dados.embrapa.br/geoserver/ows?service=WFS&version=2.0.0&request=GetCapabilities' },
+    { label: 'EPE - Empresa de Pesquisa Energética', url: 'https://geoservicos.inde.gov.br/geoserver/EPE/ows' },
+    { label: 'FUNAI - Fundação Nacional dos Povos Indígenas', url: 'https://geoserver.funai.gov.br/geoserver/ows' },
+    { label: 'FUNAI/CMR - Centro de Monitoramento e Resolução de Conflitos Fundiários', url: 'https://cmr.funai.gov.br/geoserver/ows' },
+    { label: 'IBGE - CENSO 2022 - Instituto Brasileiro de Geografia e Estatística', url: 'https://geoservicoscenso2022.ibge.gov.br/geoserver/censo2022/ows' },
+    { label: 'IBGE - Malhas Territoriais - Instituto Brasileiro de Geografia e Estatística', url: 'https://geoservicos.ibge.gov.br/geoserver/ows' },
+    { label: 'IBGE - ODS - Instituto Brasileiro de Geografia e Estatística', url: 'https://geoservicos.ibge.gov.br/geoserver/ODS/ows' },
+    // { label: 'ICA - Instituto de Cartografia Aeronáutica', url: 'https://geoaissweb.decea.gov.br/geoserver/ICA/ows' },
+    { label: 'ICMBIO - Instituto Chico Mendes de Conservação da Biodiversidade', url: 'https://geoservicos.inde.gov.br/geoserver/ICMBio/ows' },
+    { label: 'IDE SISEMA - Infraestrutura de Dados Espaciais do Sistema Estadual de Meio Ambiente de Minas Gerais', url: 'https://geoserver.meioambiente.mg.gov.br/ows' },
+    // { label: 'IDE-GEOBASES - Infraestrutura de Dados Espaciais do Espírito Santo', url: 'https://ide.geobases.es.gov.br/geoserver/ows' },
+    { label: 'INDE Catalog - Infraestrutura Nacional de Dados Espaciais', url: 'https://geoservicos.inde.gov.br/geoserver/wfs' },
+    { label: 'INEA - Instituto Estadual do Ambiente do Rio de Janeiro', url: 'https://geoservicos.inde.gov.br/geoserver/INEA/ows' },
+    { label: 'INPE - Instituto Nacional de Pesquisas Espaciais', url: 'https://terrabrasilis.dpi.inpe.br/geoserver/ows' },
+    { label: 'IPHAN - Instituto do Patrimônio Histórico e Artístico Nacional', url: 'https://geoserver.iphan.gov.br/geoserver/ows' },
+    // { label: 'MapBiomas Alerta', url: 'https://maps.alerta.mapbiomas.org/geoserver/wfs' },
+    { label: 'MB/COMPAAz - Marinha do Brasil / Comissão de Planejamento Ambiental da Amazônia', url: 'https://geoservicos.inde.gov.br/geoserver/COMPAAz/ows' },
+    { label: 'MB/DPC - Marinha do Brasil / Diretoria de Portos e Costas', url: 'https://geoservicos.inde.gov.br/geoserver/DPC/ows' },
+    { label: 'MB/DPHDM - Marinha do Brasil / Diretoria de Hidrografia e Navegação', url: 'https://geoservicos.inde.gov.br/geoserver/DPHDM/ows' },
+    { label: 'MDIC - Ministério do Desenvolvimento, Indústria, Comércio e Serviços', url: 'https://geoservicos.inde.gov.br/geoserver/MDIC/ows' },
+    { label: 'MMA - Ministério do Meio Ambiente e Mudança do Clima', url: 'https://geoservicos.inde.gov.br/geoserver/MMA/ows' },
+    { label: 'MPA - Ministério da Pesca e Aquicultura', url: 'https://geoservicos.inde.gov.br/geoserver/MPA/ows' },
+    { label: 'MPO - Ministério do Planejamento e Orçamento', url: 'https://geoservicos.inde.gov.br/geoserver/MPOG/ows' },
+    // { label: 'MS/IDE-MS - Ministério da Saúde', url: 'https://ide.saude.gov.br/geoserver/ows' },
+    { label: 'MTR - Ministério dos Transportes', url: 'https://geoservicos.inde.gov.br/geoserver/MInfra/ows' },
+    { label: 'MTUR - Ministério do Turismo', url: 'https://geoservicos.inde.gov.br/geoserver/MTU/ows' },
+    { label: 'PGGM - Presidência da República / Gabinete de Gestão Integrada', url: 'https://geoservicos.inde.gov.br/geoserver/PGGM/ows' },
     { label: 'Prefeitura BH (MG) - BH Map', url: 'https://bhmap.pbh.gov.br/v2/api/idebhgeo/wms' },
-    { label: 'Prefeitura BH (MG) - Geoservicos', url: 'https://geoservicos.pbh.gov.br/geoserver/ows' },
-    { label: 'PRODEMG (MG)', url: 'http://geoserver.prodemge.gov.br/geoserver/ows' },
-    { label: 'SEMACE (CE)', url: 'https://geoservicos.inde.gov.br/geoserver/SEMACE/ows' },
-    { label: 'SEPLAN (TO)', url: 'https://geoportal.to.gov.br/geoserver/ows' },
-    { label: 'INDE Catalog', url: 'https://geoservicos.inde.gov.br/geoserver/wfs' },
-    { label: 'MapBiomas Alerta', url: 'https://maps.alerta.mapbiomas.org/geoserver/wfs' },
-    { label: 'UFABC', url: 'https://geoservicos.inde.gov.br/geoserver/UFABC/ows' },
-    { label: 'Personalizado', url: '' }
+    // { label: 'Prefeitura BH (MG) - Geoservicos', url: 'https://geoservicos.pbh.gov.br/geoserver/ows' },
+    { label: 'PRODEMG (MG) - Companhia de Tecnologia da Informação do Estado de Minas Gerais', url: 'http://geoserver.prodemge.gov.br/geoserver/ows' },
+    // { label: 'SEMACE (CE) - Superintendência Estadual do Meio Ambiente do Ceará', url: 'https://geoservicos.inde.gov.br/geoserver/SEMACE/ows' },
+    { label: 'SEPLAN (TO) - Secretaria do Planejamento e Orçamento do Tocantins', url: 'https://geoportal.to.gov.br/geoserver/ows' },
+    { label: 'SPU - Secretaria de Patrimônio da União', url: 'https://geoservicos.inde.gov.br/geoserver/SPU/ows' },
+    { label: 'UFABC - Universidade Federal do ABC', url: 'https://geoservicos.inde.gov.br/geoserver/UFABC/ows' },
+    { label: 'VALEC - Engenharia, Construções e Ferrovias S.A.', url: 'https://geoservicos.inde.gov.br/geoserver/VALEC/ows' },
+    { label: 'Personalizado', url: '' },
 ];
 
 // --- LEGEND BOX COMPONENT ---
@@ -201,6 +204,7 @@ const LegendBox = ({ activeLayers, baseUrl, needsProxy, layers }: LegendBoxProps
 const BaseMap = () => {
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const mapContainerRef = useRef<HTMLDivElement>(null);
+    const drawRef = useRef<MapboxDraw | null>(null);
 
     const [isReady, setIsReady] = useState<boolean>(false);
 
@@ -240,6 +244,10 @@ const BaseMap = () => {
     const startHeightRef = useRef(0);
 
     const currentServerLayersRef = useRef<Set<string>>(new Set());
+
+    // New states for drawing tools
+    const [drawingEnabled, setDrawingEnabled] = useState(false);
+    const [spatialFilter, setSpatialFilter] = useState<GeoJSON.Geometry | null>(null);
 
     const filteredServers = SERVER_OPTIONS.filter(server =>
         server.label.toLowerCase().includes(serverSearch.toLowerCase()) ||
@@ -284,6 +292,13 @@ const BaseMap = () => {
         });
 
         currentServerLayersRef.current.clear();
+
+        // Clear drawing when changing server
+        if (drawRef.current) {
+            drawRef.current.deleteAll();
+            setSpatialFilter(null);
+            setDrawingEnabled(false);
+        }
     }, []);
 
     const handleDragStart = useCallback((e: React.MouseEvent) => {
@@ -318,6 +333,71 @@ const BaseMap = () => {
         document.body.style.userSelect = '';
     }, [handleDragMove]);
 
+    // Drawing event handlers
+    const handleDrawCreate = useCallback((e: { features: GeoJSON.Feature[] }) => {
+        const feature = e.features[0];
+        if (feature.geometry.type === 'Polygon') {
+            setSpatialFilter(feature.geometry);
+            setDrawingEnabled(false);
+            if (selectedLayerForTable) {
+                fetchFilteredData(selectedLayerForTable, feature.geometry);
+            }
+        }
+    }, [selectedLayerForTable]);
+
+    const handleDrawUpdate = useCallback((e: { features: GeoJSON.Feature[] }) => {
+        const feature = e.features[0];
+        if (feature.geometry.type === 'Polygon') {
+            setSpatialFilter(feature.geometry);
+            if (selectedLayerForTable) {
+                fetchFilteredData(selectedLayerForTable, feature.geometry);
+            }
+        }
+    }, [selectedLayerForTable]);
+
+    const handleDrawDelete = useCallback(() => {
+        setSpatialFilter(null);
+        setDrawingEnabled(false);
+        if (selectedLayerForTable) {
+            openAttributeTable(selectedLayerForTable);
+        }
+    }, [selectedLayerForTable]);
+
+    // Function to bring draw layers to front - more aggressive approach
+    const bringDrawLayersToFront = useCallback(() => {
+        if (!mapRef.current) return;
+
+        // Get all draw-related layers
+        const drawLayerIds = [
+            'gl-draw-polygon-fill',
+            'gl-draw-polygon-stroke',
+            'gl-draw-polygon-midpoint',
+            'gl-draw-polygon-vertex',
+            'gl-draw-line',
+            'gl-draw-point',
+            'gl-draw-polygon',
+            'gl-draw-polygon-fill-active',
+            'gl-draw-polygon-stroke-active'
+        ];
+
+        // Move each draw layer to the top
+        drawLayerIds.forEach(layerId => {
+            if (mapRef.current?.getLayer(layerId)) {
+                mapRef.current.moveLayer(layerId);
+            }
+        });
+
+        // Also move any layer that contains 'gl-draw' in its id
+        const allLayers = mapRef.current.getStyle().layers || [];
+        allLayers.forEach(layer => {
+            if (layer.id.includes('gl-draw') && !drawLayerIds.includes(layer.id)) {
+                if (mapRef.current?.getLayer(layer.id)) {
+                    mapRef.current.moveLayer(layer.id);
+                }
+            }
+        });
+    }, []);
+
     useEffect(() => {
         if (!mapContainerRef.current) return;
 
@@ -334,9 +414,30 @@ const BaseMap = () => {
 
         theBaseMap.on("load", () => {
             setIsReady(true);
+
+            const draw = new MapboxDraw({
+                displayControlsDefault: false,
+                controls: {
+                    polygon: true,
+                    trash: true
+                }
+            });
+
+            theBaseMap.addControl(draw);
+            drawRef.current = draw;
+
+            theBaseMap.on('draw.create', handleDrawCreate);
+            theBaseMap.on('draw.delete', handleDrawDelete);
+            theBaseMap.on('draw.update', handleDrawUpdate);
+
+            // Bring draw layers to front initially
+            setTimeout(() => bringDrawLayersToFront(), 200);
         });
 
         return () => {
+            if (drawRef.current) {
+                theBaseMap.removeControl(drawRef.current);
+            }
             theBaseMap.remove();
             mapRef.current = null;
             document.removeEventListener('mousemove', handleDragMove);
@@ -579,6 +680,10 @@ const BaseMap = () => {
                 });
 
                 currentServerLayersRef.current.add(layerName);
+
+                // Bring draw layers to front after adding a new layer
+                setTimeout(() => bringDrawLayersToFront(), 50);
+                setTimeout(() => bringDrawLayersToFront(), 200);
             }
         }
 
@@ -601,6 +706,9 @@ const BaseMap = () => {
 
         setActiveLayers(new Set());
         setShowTable(false);
+
+        // Bring draw layers to front after removing layers
+        setTimeout(() => bringDrawLayersToFront(), 50);
     };
 
     const openAttributeTable = async (layerName: string) => {
@@ -613,7 +721,7 @@ const BaseMap = () => {
         setCurrentPage(0);
 
         try {
-            const url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674`;;
+            const url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674`;
 
             const response = needsProxy ? await proxyFetch(url) : await fetch(url);
 
@@ -624,10 +732,22 @@ const BaseMap = () => {
             const data = await response.json();
 
             if (data.features && data.features.length > 0) {
-                const props = data.features.map((feature: any) => feature.properties);
-                setTableData(props);
-                const columns = Object.keys(props[0]);
-                setTableColumns(columns);
+                // Filter client-side if spatial filter exists
+                let features = data.features;
+                if (spatialFilter && spatialFilter.type === 'Polygon') {
+                    features = data.features.filter((feature: any) =>
+                        isFeatureInPolygon(feature, spatialFilter.coordinates[0])
+                    );
+                }
+
+                if (features.length > 0) {
+                    const props = features.map((feature: any) => feature.properties);
+                    setTableData(props);
+                    const columns = Object.keys(props[0]);
+                    setTableColumns(columns);
+                } else {
+                    setTableError('Nenhuma feição encontrada na área selecionada');
+                }
             } else {
                 setTableError('Nenhuma feição encontrada para esta camada');
             }
@@ -639,6 +759,227 @@ const BaseMap = () => {
         }
     };
 
+    const fetchFilteredData = async (layerName: string, geometry?: GeoJSON.Geometry) => {
+        setLoadingTable(true);
+        setTableError(null);
+        setTableData([]);
+        setTableColumns([]);
+        setCurrentPage(0);
+
+        try {
+            const url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674`;
+
+            const response = needsProxy ? await proxyFetch(url) : await fetch(url);
+
+            if (!response.ok) {
+                throw new Error(`Requisição WFS falhou com status ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.features && data.features.length > 0) {
+                let features = data.features;
+                if (geometry && geometry.type === 'Polygon') {
+                    features = data.features.filter((feature: any) =>
+                        isFeatureInPolygon(feature, geometry.coordinates[0])
+                    );
+                }
+
+                if (features.length > 0) {
+                    const props = features.map((feature: any) => feature.properties);
+                    setTableData(props);
+                    const columns = Object.keys(props[0]);
+                    setTableColumns(columns);
+                } else {
+                    setTableError('Nenhuma feição encontrada na área selecionada');
+                }
+            } else {
+                setTableError('Nenhuma feição encontrada para esta camada');
+            }
+        } catch (err) {
+            console.error(`Falha ao buscar dados para ${layerName}:`, err);
+            setTableError(err instanceof Error ? err.message : 'Falha ao buscar dados');
+        } finally {
+            setLoadingTable(false);
+        }
+    };
+
+    // Helper functions for client-side filtering
+    const pointInPolygon = (point: number[], polygon: number[][]): boolean => {
+        let inside = false;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            const xi = polygon[i][0], yi = polygon[i][1];
+            const xj = polygon[j][0], yj = polygon[j][1];
+
+            const intersect = ((yi > point[1]) !== (yj > point[1]))
+                && (point[0] < (xj - xi) * (point[1] - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    };
+
+    const getGeometryPoints = (geometry: any): number[][] => {
+        if (!geometry) return [];
+
+        switch (geometry.type) {
+            case 'Point':
+                return [geometry.coordinates];
+            case 'MultiPoint':
+                return geometry.coordinates;
+            case 'LineString':
+                return geometry.coordinates;
+            case 'MultiLineString':
+                return geometry.coordinates.flat();
+            case 'Polygon':
+                return geometry.coordinates[0];
+            case 'MultiPolygon':
+                return geometry.coordinates.flat(2);
+            default:
+                return [];
+        }
+    };
+
+    const isFeatureInPolygon = (feature: any, filterPolygon: number[][]): boolean => {
+        if (!feature.geometry) return false;
+
+        const points = getGeometryPoints(feature.geometry);
+
+        if (points.length > 0) {
+            const centroid = points.reduce(
+                (acc, point) => [acc[0] + point[0] / points.length, acc[1] + point[1] / points.length],
+                [0, 0]
+            );
+
+            if (pointInPolygon(centroid, filterPolygon)) return true;
+
+            const sampleSize = Math.min(10, points.length);
+            for (let i = 0; i < sampleSize; i++) {
+                const index = Math.floor(i * (points.length / sampleSize));
+                if (pointInPolygon(points[index], filterPolygon)) return true;
+            }
+        }
+
+        return false;
+    };
+
+    const convertToCSV = (features: any[]): string => {
+        if (features.length === 0) return '';
+
+        const headers = Object.keys(features[0].properties);
+        const csvRows = [headers.join(',')];
+
+        features.forEach(feature => {
+            const values = headers.map(header => {
+                const val = feature.properties[header];
+                const strVal = val !== null && val !== undefined ? String(val) : '';
+                return `"${strVal.replace(/"/g, '""')}"`;
+            });
+            csvRows.push(values.join(','));
+        });
+
+        return csvRows.join('\n');
+    };
+
+    // FIXED: Download only data within the drawn area using client-side filtering
+    const downloadLayerByDraw = async (layerName: string, format: 'geojson' | 'shapefile' | 'csv' | 'kml') => {
+        if (!spatialFilter || spatialFilter.type !== 'Polygon') {
+            alert('Por favor, desenhe uma área no mapa primeiro!');
+            return;
+        }
+
+        setDownloadingLayer(layerName);
+
+        try {
+            console.log('Baixando todos os dados da camada...');
+
+            const fullDataUrl = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674`;
+
+            console.log('URL:', fullDataUrl);
+
+            const response = needsProxy ? await proxyFetch(fullDataUrl) : await fetch(fullDataUrl);
+
+            if (!response.ok) {
+                throw new Error(`Falha ao baixar dados: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (!data.features || data.features.length === 0) {
+                alert('Nenhuma feição encontrada nesta camada');
+                return;
+            }
+
+            console.log(`Total de feições baixadas: ${data.features.length}`);
+
+            const filterPolygon = (spatialFilter as GeoJSON.Polygon).coordinates[0];
+
+            console.log('Filtrando feições pela área desenhada...');
+
+            const filteredFeatures = data.features.filter((feature: any) =>
+                isFeatureInPolygon(feature, filterPolygon)
+            );
+
+            console.log(`Feições após filtro: ${filteredFeatures.length}`);
+
+            if (filteredFeatures.length === 0) {
+                alert('Nenhuma feição encontrada na área selecionada');
+                return;
+            }
+
+            let blob: Blob;
+            let fileExtension: string;
+
+            if (format === 'geojson') {
+                const filteredData = {
+                    type: 'FeatureCollection',
+                    features: filteredFeatures
+                };
+                blob = new Blob([JSON.stringify(filteredData)], { type: 'application/json' });
+                fileExtension = 'geojson';
+            } else if (format === 'shapefile') {
+                const filteredData = {
+                    type: 'FeatureCollection',
+                    features: filteredFeatures
+                };
+                blob = new Blob([JSON.stringify(filteredData)], { type: 'application/json' });
+                fileExtension = 'geojson';
+                alert('Shapefile não pode ser gerado com filtro local. Baixado como GeoJSON.');
+            } else if (format === 'csv') {
+                const csvContent = convertToCSV(filteredFeatures);
+                blob = new Blob([csvContent], { type: 'text/csv' });
+                fileExtension = 'csv';
+            } else if (format === 'kml') {
+                const filteredData = {
+                    type: 'FeatureCollection',
+                    features: filteredFeatures
+                };
+                blob = new Blob([JSON.stringify(filteredData)], { type: 'application/json' });
+                fileExtension = 'geojson';
+                alert('KML não pode ser gerado com filtro local. Baixado como GeoJSON.');
+            } else {
+                throw new Error('Formato não suportado');
+            }
+
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `${layerName}_area_selecionada.${fileExtension}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+
+            console.log('Download concluído com sucesso!');
+
+        } catch (err) {
+            console.error('Erro no download:', err);
+            alert(`Falha ao baixar ${layerName}. Erro: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
+        } finally {
+            setDownloadingLayer(null);
+        }
+    };
+
+    // Regular download function (unchanged)
     const downloadLayer = async (layerName: string, format: 'geojson' | 'shapefile' | 'csv' | 'kml') => {
         setDownloadingLayer(layerName);
 
@@ -668,25 +1009,6 @@ const BaseMap = () => {
             const response = needsProxy ? await proxyFetch(url) : await fetch(url);
 
             if (!response.ok) {
-                if (format === 'kml') {
-                    const altUrl = `${baseUrl}?service=WFS&version=1.1.0&request=GetFeature&typeName=${layerName}&outputFormat=KML&srsName=EPSG:4674`;
-                    const altResponse = needsProxy ? await proxyFetch(altUrl) : await fetch(altUrl);
-
-                    if (!altResponse.ok) {
-                        throw new Error('Formato KML não suportado por este servidor');
-                    }
-
-                    const blob = await altResponse.blob();
-                    const downloadUrl = window.URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = downloadUrl;
-                    link.download = `${layerName}.kml`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    window.URL.revokeObjectURL(downloadUrl);
-                    return;
-                }
                 throw new Error(`Falha no download com status ${response.status}`);
             }
 
@@ -702,7 +1024,7 @@ const BaseMap = () => {
 
         } catch (err) {
             console.error(`Falha ao baixar camada ${layerName}:`, err);
-            alert(`Falha ao baixar ${layerName}. O servidor pode não suportar downloads WFS ou o formato solicitado.`);
+            alert(`Falha ao baixar ${layerName}.`);
         } finally {
             setDownloadingLayer(null);
         }
@@ -1060,6 +1382,224 @@ const BaseMap = () => {
                             </button>
                         </div>
 
+                        {/* Drawing Tool Section */}
+                        <div style={{
+                            padding: '10px 15px',
+                            backgroundColor: spatialFilter ? '#e8f5e8' : '#fff',
+                            borderBottom: '1px solid #e0e0e0'
+                        }}>
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginBottom: spatialFilter ? 8 : 0
+                            }}>
+                                <button
+                                    onClick={() => {
+                                        if (!drawRef.current) return;
+
+                                        if (drawingEnabled) {
+                                            // Reset: delete all drawings, clear filter, change mode
+                                            drawRef.current.deleteAll();
+                                            drawRef.current.changeMode('simple_select');
+                                            setDrawingEnabled(false);
+                                            setSpatialFilter(null);
+                                        } else {
+                                            if (spatialFilter) {
+                                                drawRef.current.deleteAll();
+                                                setSpatialFilter(null);
+                                            }
+                                            drawRef.current.changeMode('draw_polygon');
+                                            setDrawingEnabled(true);
+                                        }
+
+                                        // Bring draw layers to front
+                                        setTimeout(() => bringDrawLayersToFront(), 50);
+                                        setTimeout(() => bringDrawLayersToFront(), 200);
+                                    }}
+                                    style={{
+                                        padding: '6px 12px',
+                                        fontSize: 11,
+                                        backgroundColor: drawingEnabled ? '#FF5722' : '#4CAF50',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: 4,
+                                        cursor: 'pointer',
+                                        fontWeight: 'bold',
+                                        flex: 1
+                                    }}
+                                >
+                                    {drawingEnabled ? '🔲 Parar Desenho' : '✏️ Desenhar Área de Interesse'}
+                                </button>
+                            </div>
+
+                            {spatialFilter && (
+                                <div style={{ marginTop: 8 }}>
+                                    <div style={{
+                                        fontSize: 11,
+                                        color: '#2e7d32',
+                                        fontWeight: 'bold',
+                                        marginBottom: 8,
+                                        textAlign: 'center',
+                                        backgroundColor: '#c8e6c9',
+                                        padding: '4px',
+                                        borderRadius: 3
+                                    }}>
+                                        ✅ Área de filtro ativa - Downloads serão limitados a esta área
+                                    </div>
+
+                                    <div style={{
+                                        fontSize: 10,
+                                        color: '#666',
+                                        marginBottom: 8,
+                                        textAlign: 'center'
+                                    }}>
+                                        Selecione uma camada abaixo para baixar apenas os dados desta área
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                                        <button
+                                            onClick={() => {
+                                                if (drawRef.current) {
+                                                    drawRef.current.deleteAll();
+                                                }
+                                                setSpatialFilter(null);
+                                                setDrawingEnabled(false);
+                                                if (selectedLayerForTable) {
+                                                    openAttributeTable(selectedLayerForTable);
+                                                }
+
+                                                // Bring draw layers to front
+                                                setTimeout(() => bringDrawLayersToFront(), 50);
+                                            }}
+                                            style={{
+                                                flex: 1,
+                                                padding: '4px',
+                                                fontSize: 10,
+                                                backgroundColor: '#EF5350',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: 3,
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            🗑️ Limpar Área
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Active layers with draw download option */}
+                        {activeLayers.size > 0 && spatialFilter && (
+                            <div style={{ padding: '10px', backgroundColor: '#f0f8f0' }}>
+                                <div style={{
+                                    fontSize: 12,
+                                    fontWeight: 'bold',
+                                    color: '#2e7d32',
+                                    marginBottom: 8,
+                                    textAlign: 'center'
+                                }}>
+                                    🎯 Baixar dados da área selecionada:
+                                </div>
+                                {activeLayersList.map(layer => (
+                                    <div key={layer.name} style={{
+                                        padding: '8px',
+                                        backgroundColor: 'white',
+                                        marginBottom: 5,
+                                        borderRadius: 4,
+                                        border: '2px solid #4CAF50'
+                                    }}>
+                                        <div style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 5 }}>
+                                            {layer.title}
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    downloadLayerByDraw(layer.name, 'geojson');
+                                                }}
+                                                disabled={downloadingLayer === layer.name}
+                                                style={{
+                                                    padding: '4px 8px',
+                                                    fontSize: 9,
+                                                    backgroundColor: '#4CAF50',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: 3,
+                                                    cursor: 'pointer',
+                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1,
+                                                    fontWeight: 'bold'
+                                                }}
+                                            >
+                                                {downloadingLayer === layer.name ? '...' : '📦 GeoJSON'}
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    downloadLayerByDraw(layer.name, 'shapefile');
+                                                }}
+                                                disabled={downloadingLayer === layer.name}
+                                                style={{
+                                                    padding: '4px 8px',
+                                                    fontSize: 9,
+                                                    backgroundColor: '#2196F3',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: 3,
+                                                    cursor: 'pointer',
+                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1,
+                                                    fontWeight: 'bold'
+                                                }}
+                                            >
+                                                {downloadingLayer === layer.name ? '...' : '📦 SHP'}
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    downloadLayerByDraw(layer.name, 'csv');
+                                                }}
+                                                disabled={downloadingLayer === layer.name}
+                                                style={{
+                                                    padding: '4px 8px',
+                                                    fontSize: 9,
+                                                    backgroundColor: '#FF9800',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: 3,
+                                                    cursor: 'pointer',
+                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1,
+                                                    fontWeight: 'bold'
+                                                }}
+                                            >
+                                                {downloadingLayer === layer.name ? '...' : '📦 CSV'}
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    downloadLayerByDraw(layer.name, 'kml');
+                                                }}
+                                                disabled={downloadingLayer === layer.name}
+                                                style={{
+                                                    padding: '4px 8px',
+                                                    fontSize: 9,
+                                                    backgroundColor: '#E91E63',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: 3,
+                                                    cursor: 'pointer',
+                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1,
+                                                    fontWeight: 'bold'
+                                                }}
+                                            >
+                                                {downloadingLayer === layer.name ? '...' : '📦 KML'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         {activeTab === 'selected' && activeLayers.size > 0 && (
                             <div style={{
                                 display: 'flex',
@@ -1208,6 +1748,21 @@ const BaseMap = () => {
                                         </div>
 
                                         <div style={{ display: 'flex', gap: 4, marginLeft: 28, flexWrap: 'wrap' }}>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); openAttributeTable(layer.name); }}
+                                                style={{
+                                                    padding: '4px 10px',
+                                                    fontSize: 10,
+                                                    backgroundColor: '#9C27B0',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: 3,
+                                                    cursor: 'pointer',
+                                                    fontWeight: 'bold'
+                                                }}
+                                            >
+                                                📊 Abrir Tabela
+                                            </button>
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'geojson'); }}
                                                 disabled={downloadingLayer === layer.name}
@@ -1457,7 +2012,7 @@ const BaseMap = () => {
                 </div>
             )}
 
-            {/* ATTRIBUTE TABLE - Pagination buttons in the HEADER next to feições info */}
+            {/* ATTRIBUTE TABLE */}
             {showTable && selectedLayerForTable && (
                 <div
                     ref={tableRef}
@@ -1477,7 +2032,6 @@ const BaseMap = () => {
                         boxSizing: 'border-box'
                     }}
                 >
-                    {/* Drag Handle */}
                     <div
                         onMouseDown={handleDragStart}
                         style={{
@@ -1509,7 +2063,6 @@ const BaseMap = () => {
                         />
                     </div>
 
-                    {/* Table Header - With pagination buttons integrated */}
                     <div style={{
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -1535,11 +2088,21 @@ const BaseMap = () => {
                             }}>
                                 {layers.find(l => l.name === selectedLayerForTable)?.title || selectedLayerForTable}
                             </div>
+                            {spatialFilter && (
+                                <div style={{
+                                    fontSize: 11,
+                                    color: '#2e7d32',
+                                    backgroundColor: '#c8e6c9',
+                                    padding: '2px 10px',
+                                    borderRadius: 10,
+                                    fontWeight: 'bold'
+                                }}>
+                                    🎯 Dados Filtrados
+                                </div>
+                            )}
                         </div>
 
-                        {/* PAGINATION CONTROLS - Right side of header */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {/* Feições count + pages info */}
                             <div style={{
                                 fontSize: 11,
                                 color: '#333',
@@ -1551,7 +2114,6 @@ const BaseMap = () => {
                                 {tableData.length} feições ({totalPages} páginas)
                             </div>
 
-                            {/* Rows per page selector */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <span style={{ fontSize: 10, color: '#888' }}>por pág:</span>
                                 <select
@@ -1575,7 +2137,6 @@ const BaseMap = () => {
                                 </select>
                             </div>
 
-                            {/* Page navigation buttons */}
                             <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                                 <button
                                     onClick={() => setCurrentPage(0)}
@@ -1612,7 +2173,6 @@ const BaseMap = () => {
                                     ◀
                                 </button>
 
-                                {/* Page input */}
                                 <input
                                     type="number"
                                     min={1}
@@ -1673,7 +2233,6 @@ const BaseMap = () => {
                                 </button>
                             </div>
 
-                            {/* Close button */}
                             <button
                                 onClick={() => {
                                     setShowTable(false);
@@ -1696,14 +2255,12 @@ const BaseMap = () => {
                         </div>
                     </div>
 
-                    {/* Table Content */}
                     <div style={{
                         flex: 1,
                         overflow: 'auto',
                         position: 'relative',
                         minHeight: 0,
-                        paddingBottom: '60px' // <--- ADD THIS LINE
-
+                        paddingBottom: '60px'
                     }}>
                         {loadingTable ? (
                             <div style={{
@@ -1823,7 +2380,6 @@ const BaseMap = () => {
                         )}
                     </div>
 
-                    {/* Bottom footer - Summary only */}
                     {!loadingTable && !tableError && tableData.length > 0 && (
                         <div style={{
                             display: 'flex',
