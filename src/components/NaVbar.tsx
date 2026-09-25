@@ -159,7 +159,7 @@ const Navbar = () => {
                             boxSizing: "border-box",
 
                             color: isActive
-                                ? "#EC6A2B" // Arcadis Orange
+                                ? "#EC6A2B"
                                 : "#666666",
 
                             textDecoration: "none",

@@ -132,9 +132,7 @@
 // Header.tsx
 // import layersMap from "../assets/ChatGPT Image 11 de ago. de 2026, 00_51_29.png";
 import Navbar from "./NaVbar";
-// import arcadisLogo from "../assets/arcadis-logo-black.svg";
 
-import arcadisLogo from "../assets/logo-provisoria-teste.png";
 
 
 const Header = () => {
@@ -156,7 +154,6 @@ const Header = () => {
                 fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
             }}
         >
-            {/* Left - Arcadis Logo and Brand */}
             <div
                 style={{
                     display: "flex",
@@ -165,17 +162,7 @@ const Header = () => {
                     minWidth: "320px", // Ensures the left section takes enough space
                 }}
             >
-                <img
-                    src={arcadisLogo}
-                    alt="Arcadis"
-                    style={{
-                        height: "30px",
-                        objectFit: "contain",
-                        display: "block",
-                        margin: 0,
-                        padding: 0
-                    }}
-                />
+
 
                 <div>
                     <h1

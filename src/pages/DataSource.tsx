@@ -387,7 +387,7 @@ const DataSource = () => {
         <div style={{
             padding: '30px',
             minHeight: '100vh',
-            backgroundColor: '#F7F7F7', // Light Arcadis gray
+            backgroundColor: '#F7F7F7',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -406,7 +406,6 @@ const DataSource = () => {
                 height: '80vh',
             }}>
 
-                {/* Top Header Area - Arcadis Style */}
                 <div style={{
                     backgroundColor: '#FFFFFF',
                     padding: '24px 30px',
@@ -415,8 +414,8 @@ const DataSource = () => {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     gap: '16px',
-                    // borderBottom: '2px solid #EC6A2B', // Arcadis Orange accent
-                    // borderTop: '4px solid #EC6A2B', // Top accent bar
+                    // borderBottom: '2px solid #EC6A2B',
+                    // borderTop: '4px solid #EC6A2B',
                     flexShrink: 0,
                     background: 'linear-gradient(180deg, #FFFFFF 0%, #FAFAFA 100%)'
                 }}>
@@ -517,7 +516,7 @@ const DataSource = () => {
                     }}>
                         <thead>
                             <tr style={{
-                                borderBottom: '2px solid #EC6A2B' // Arcadis Orange border
+                                borderBottom: '2px solid #EC6A2B'
                             }}>
                                 <th style={{
                                     textAlign: 'left',
@@ -571,7 +570,7 @@ const DataSource = () => {
                                                 width: '8px',
                                                 height: '8px',
                                                 borderRadius: '50%',
-                                                backgroundColor: '#EC6A2B', // Arcadis Orange
+                                                backgroundColor: '#EC6A2B',
                                                 display: 'inline-block',
                                                 flexShrink: 0
                                             }} />
@@ -590,7 +589,7 @@ const DataSource = () => {
                                                     rel="noopener noreferrer"
                                                     style={{
                                                         display: 'inline-block',
-                                                        backgroundColor: '#EC6A2B', // Arcadis Orange
+                                                        backgroundColor: '#EC6A2B',
                                                         color: '#FFFFFF',
                                                         padding: '7px 18px',
                                                         borderRadius: '4px',
@@ -649,7 +648,6 @@ const DataSource = () => {
                     </table>
                 </div>
 
-                {/* Simple Footer - Arcadis Style */}
                 <div style={{
                     padding: '16px 30px',
                     borderTop: '1px solid #F0F0F0',
@@ -677,7 +675,7 @@ const DataSource = () => {
                             backgroundColor: '#EC6A2B',
                             display: 'inline-block'
                         }} />
-                        Arcadis Style Interface
+                        Style Interface
                     </span>
                 </div>
             </div>
