@@ -356,6 +356,118 @@ async function buildShapefileZip(features: any[], layerName: string): Promise<Bl
 }
 
 // ============================================================================
+// KML WRITER
+// Builds a KML 2.2 document in pure JS from clipped GeoJSON features.
+// Used for the "draw area → download KML" flow so that the client-side
+// clipped features can be exported as real KML (not GeoJSON fallback).
+// GeoJSON coordinates are [lon, lat] which matches KML's "lon,lat" order,
+// so no axis swap is needed. Coordinates are emitted at full precision.
+// ============================================================================
+
+function kmlEscape(str: string): string {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+}
+
+function kmlCoords(coords: number[][]): string {
+    return coords.map(([lon, lat]) => `${lon},${lat},0`).join(' ');
+}
+
+function kmlPolygon(rings: number[][][]): string {
+    if (!rings || rings.length === 0) return '';
+    const outer = rings[0];
+    const inner = rings.slice(1);
+    let s = '<Polygon><tessellate>1</tessellate>';
+    s += `<outerBoundaryIs><LinearRing><coordinates>${kmlCoords(outer)}</coordinates></LinearRing></outerBoundaryIs>`;
+    for (const r of inner) {
+        s += `<innerBoundaryIs><LinearRing><coordinates>${kmlCoords(r)}</coordinates></LinearRing></innerBoundaryIs>`;
+    }
+    s += '</Polygon>';
+    return s;
+}
+
+function kmlGeometry(geometry: any): string {
+    if (!geometry) return '';
+    const t = geometry.type;
+    if (t === 'Point') {
+        return `<Point><coordinates>${kmlCoords([geometry.coordinates])}</coordinates></Point>`;
+    }
+    if (t === 'MultiPoint') {
+        return `<MultiGeometry>${(geometry.coordinates as number[][]).map(c =>
+            `<Point><coordinates>${kmlCoords([c])}</coordinates></Point>`
+        ).join('')}</MultiGeometry>`;
+    }
+    if (t === 'LineString') {
+        return `<LineString><tessellate>1</tessellate><coordinates>${kmlCoords(geometry.coordinates)}</coordinates></LineString>`;
+    }
+    if (t === 'MultiLineString') {
+        return `<MultiGeometry>${(geometry.coordinates as number[][][]).map(c =>
+            `<LineString><tessellate>1</tessellate><coordinates>${kmlCoords(c)}</coordinates></LineString>`
+        ).join('')}</MultiGeometry>`;
+    }
+    if (t === 'Polygon') {
+        return kmlPolygon(geometry.coordinates);
+    }
+    if (t === 'MultiPolygon') {
+        return `<MultiGeometry>${(geometry.coordinates as number[][][][]).map(rings =>
+            kmlPolygon(rings)
+        ).join('')}</MultiGeometry>`;
+    }
+    return '';
+}
+
+function buildKml(features: any[], layerName: string): string {
+    const parts: string[] = [];
+    parts.push('<?xml version="1.0" encoding="UTF-8"?>');
+    parts.push('<kml xmlns="http://www.opengis.net/kml/2.2">');
+    parts.push('<Document>');
+    parts.push(`<name>${kmlEscape(layerName || 'layer')}</name>`);
+
+    for (const f of features) {
+        if (!f || !f.geometry) continue;
+        const geomXml = kmlGeometry(f.geometry);
+        if (!geomXml) continue;
+
+        parts.push('<Placemark>');
+
+        const props = f.properties || {};
+        const preferredNameKeys = ['name', 'Name', 'NAME', 'nome', 'Nome', 'NOME', 'title', 'Title'];
+        let placemarkName: string | undefined;
+        for (const k of preferredNameKeys) {
+            if (props[k] !== undefined && props[k] !== null && String(props[k]).length > 0) {
+                placemarkName = String(props[k]);
+                break;
+            }
+        }
+        if (placemarkName !== undefined) {
+            parts.push(`<name>${kmlEscape(placemarkName)}</name>`);
+        }
+
+        const propKeys = Object.keys(props);
+        if (propKeys.length > 0) {
+            parts.push('<ExtendedData>');
+            for (const k of propKeys) {
+                const v = props[k];
+                if (v === null || v === undefined) continue;
+                parts.push(`<Data name="${kmlEscape(k)}"><value>${kmlEscape(String(v))}</value></Data>`);
+            }
+            parts.push('</ExtendedData>');
+        }
+
+        parts.push(geomXml);
+        parts.push('</Placemark>');
+    }
+
+    parts.push('</Document>');
+    parts.push('</kml>');
+    return parts.join('\n');
+}
+
+// ============================================================================
 
 interface WMSLayer {
     name: string;
@@ -1733,13 +1845,9 @@ const BaseMap = () => {
                 blob = new Blob([csvContent], { type: 'text/csv' });
                 fileExtension = 'csv';
             } else if (format === 'kml') {
-                const clippedData = {
-                    type: 'FeatureCollection',
-                    features: clippedFeatures
-                };
-                blob = new Blob([JSON.stringify(clippedData)], { type: 'application/json' });
-                fileExtension = 'geojson';
-                alert('KML não pode ser gerado com filtro local. Baixado como GeoJSON.');
+                const kmlContent = buildKml(clippedFeatures, layerName);
+                blob = new Blob([kmlContent], { type: 'application/vnd.google-earth.kml+xml' });
+                fileExtension = 'kml';
             } else {
                 throw new Error('Formato não suportado');
             }
