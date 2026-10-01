@@ -31,20 +31,15 @@ interface ShapefileRecord {
     point?: [number, number];
 }
 
+// Only MultiPoint is exploded (Point Shape type has no multi-part concept).
+// MultiPolygon and MultiLineString are kept as one feature so that one DBF
+// record corresponds to one GeoJSON feature — no duplicated IDs.
 function explodeForShapefile(features: any[]): any[] {
     const out: any[] = [];
     for (const f of features) {
         if (!f || !f.geometry) continue;
         const t = f.geometry.type;
-        if (t === 'MultiPolygon') {
-            for (const c of f.geometry.coordinates) {
-                out.push({ type: 'Feature', properties: { ...(f.properties || {}) }, geometry: { type: 'Polygon', coordinates: c } });
-            }
-        } else if (t === 'MultiLineString') {
-            for (const c of f.geometry.coordinates) {
-                out.push({ type: 'Feature', properties: { ...(f.properties || {}) }, geometry: { type: 'LineString', coordinates: c } });
-            }
-        } else if (t === 'MultiPoint') {
+        if (t === 'MultiPoint') {
             for (const c of f.geometry.coordinates) {
                 out.push({ type: 'Feature', properties: { ...(f.properties || {}) }, geometry: { type: 'Point', coordinates: c } });
             }
@@ -73,8 +68,51 @@ function featureToShapefileRecord(f: any): ShapefileRecord | null {
         }
         return { shapeType: SHAPE_TYPE_POLYLINE, bbox: [minX, minY, maxX, maxY], parts: [pts.slice()], points: pts.slice() };
     }
+    if (g.type === 'MultiLineString') {
+        // One record with multiple parts (one part per sub-linestring).
+        const lines = g.coordinates as number[][][];
+        const parts: number[][][] = lines.map(l => l.slice());
+        const flat: number[][] = [];
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const line of parts) {
+            for (const [x, y] of line) {
+                flat.push([x, y]);
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+            }
+        }
+        return { shapeType: SHAPE_TYPE_POLYLINE, bbox: [minX, minY, maxX, maxY], parts, points: flat };
+    }
     if (g.type === 'Polygon') {
         const rings = (g.coordinates as number[][][]).map(r => r.slice().reverse());
+        const flat: number[][] = [];
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const ring of rings) {
+            for (const [x, y] of ring) {
+                flat.push([x, y]);
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+            }
+        }
+        return { shapeType: SHAPE_TYPE_POLYGON, bbox: [minX, minY, maxX, maxY], parts: rings, points: flat };
+    }
+    if (g.type === 'MultiPolygon') {
+        // One record with multiple rings from all sub-polygons flattened into
+        // a single parts array. ESRI Shapefile spec explicitly permits
+        // multiple outer rings inside a single Polygon record. GeoJSON rings
+        // are CCW-outer / CW-hole; Shapefile expects the opposite, so we
+        // reverse every ring as we do for single Polygon.
+        const polys = g.coordinates as number[][][][];
+        const rings: number[][][] = [];
+        for (const poly of polys) {
+            for (const ring of poly) {
+                rings.push(ring.slice().reverse());
+            }
+        }
         const flat: number[][] = [];
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (const ring of rings) {
@@ -322,7 +360,10 @@ async function buildShapefileZip(features: any[], layerName: string): Promise<Bl
     const families: Record<string, any[]> = {};
     for (const f of exploded) {
         const t = f.geometry.type;
-        const fam = t === 'Point' ? 'point' : t === 'LineString' ? 'line' : t === 'Polygon' ? 'polygon' : null;
+        const fam =
+            t === 'Point' ? 'point' :
+                (t === 'LineString' || t === 'MultiLineString') ? 'line' :
+                    (t === 'Polygon' || t === 'MultiPolygon') ? 'polygon' : null;
         if (!fam) continue;
         (families[fam] ||= []).push(f);
     }
@@ -703,7 +744,7 @@ const BaseMap = () => {
     const [drawingEnabled, setDrawingEnabled] = useState(false);
     const [spatialFilter, setSpatialFilter] = useState<GeoJSON.Geometry | null>(null);
 
-    // --- NEW: UI state for basemap switcher and panel collapse -----------------
+    // --- UI state for basemap switcher and panel collapse ---------------------
     const [activeBasemap, setActiveBasemap] = useState<'light' | 'dark' | 'satellite'>('light');
     const [serverPanelCollapsed, setServerPanelCollapsed] = useState(false);
     const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
@@ -1287,7 +1328,7 @@ const BaseMap = () => {
         if (bbox) fitMapToBBox(bbox);
     };
 
-    // --- NEW: basemap switcher --------------------------------------------------
+    // --- basemap switcher ------------------------------------------------------
     const switchBasemap = (type: 'light' | 'dark' | 'satellite') => {
         if (!mapRef.current) return;
         const styleUrls: Record<string, string> = {
@@ -2316,9 +2357,8 @@ const BaseMap = () => {
                                             {connectionStatus === 'idle' && 'Não conectado'}
                                         </div>
 
-                                        {/* NEW: basemap switcher */}
                                         <div style={{ marginTop: 10 }}>
-                                            <div style={{ fontWeight: 'bold', fontSize: 12, color: '#3B3B3B' }}>
+                                            <div style={{ fontSize: 10, color: '#888', marginBottom: 4, fontWeight: 600, letterSpacing: '0.3px' }}>
                                                 MAPA BASE
                                             </div>
                                             <div style={{ display: 'flex', gap: 4 }}>
