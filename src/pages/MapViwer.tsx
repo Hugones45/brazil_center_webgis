@@ -1,10 +1,10 @@
 // BaseMap.tsx
 
-import mapboxgl from "mapbox-gl"
-import 'mapbox-gl/dist/mapbox-gl.css';
-import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
+import * as maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import MapboxDraw from "@mapbox/mapbox-gl-draw";
+import { TerraDraw, TerraDrawPolygonMode, TerraDrawSelectMode } from 'terra-draw';
+import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter';
 import { intersect } from '@turf/intersect';
 import { featureCollection } from '@turf/helpers';
 import booleanIntersects from '@turf/boolean-intersects';
@@ -14,9 +14,73 @@ import midpoint from '@turf/midpoint';
 import JSZip from 'jszip';
 
 // ============================================================================
+// BASEMAP STYLES
+// ============================================================================
+
+const LIGHT_STYLE: any = {
+    version: 8,
+    sources: {
+        'osm-light': {
+            type: 'raster',
+            tiles: [
+                'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+            ],
+            tileSize: 256,
+            attribution: '© OpenStreetMap contributors'
+        }
+    },
+    layers: [
+        { id: 'osm-light-layer', type: 'raster', source: 'osm-light' }
+    ]
+};
+
+const DARK_STYLE: any = {
+    version: 8,
+    sources: {
+        'osm-dark': {
+            type: 'raster',
+            tiles: [
+                'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+                'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+                'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+            ],
+            tileSize: 256,
+            attribution: '© CARTO © OpenStreetMap contributors'
+        }
+    },
+    layers: [
+        { id: 'osm-dark-layer', type: 'raster', source: 'osm-dark' }
+    ]
+};
+
+const SATELLITE_STYLE: any = {
+    version: 8,
+    sources: {
+        'esri-satellite': {
+            type: 'raster',
+            tiles: [
+                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+            ],
+            tileSize: 256,
+            attribution: '© Esri, Maxar, Earthstar Geographics'
+        }
+    },
+    layers: [
+        { id: 'esri-satellite-layer', type: 'raster', source: 'esri-satellite' }
+    ]
+};
+
+// IDs of the basemap layers that must stay at the very bottom.
+const BASEMAP_LAYER_IDS = new Set([
+    'osm-light-layer',
+    'osm-dark-layer',
+    'esri-satellite-layer'
+]);
+
+// ============================================================================
 // SHAPEFILE WRITER
-// Writes .shp / .shx / .dbf / .prj / .cpg in pure JS. One record per feature,
-// complete attribute table. Runs entirely in the browser.
 // ============================================================================
 
 const SHAPE_TYPE_POINT = 1;
@@ -31,9 +95,6 @@ interface ShapefileRecord {
     point?: [number, number];
 }
 
-// Only MultiPoint is exploded (Point Shape type has no multi-part concept).
-// MultiPolygon and MultiLineString are kept as one feature so that one DBF
-// record corresponds to one GeoJSON feature — no duplicated IDs.
 function explodeForShapefile(features: any[]): any[] {
     const out: any[] = [];
     for (const f of features) {
@@ -69,7 +130,6 @@ function featureToShapefileRecord(f: any): ShapefileRecord | null {
         return { shapeType: SHAPE_TYPE_POLYLINE, bbox: [minX, minY, maxX, maxY], parts: [pts.slice()], points: pts.slice() };
     }
     if (g.type === 'MultiLineString') {
-        // One record with multiple parts (one part per sub-linestring).
         const lines = g.coordinates as number[][][];
         const parts: number[][][] = lines.map(l => l.slice());
         const flat: number[][] = [];
@@ -101,11 +161,6 @@ function featureToShapefileRecord(f: any): ShapefileRecord | null {
         return { shapeType: SHAPE_TYPE_POLYGON, bbox: [minX, minY, maxX, maxY], parts: rings, points: flat };
     }
     if (g.type === 'MultiPolygon') {
-        // One record with multiple rings from all sub-polygons flattened into
-        // a single parts array. ESRI Shapefile spec explicitly permits
-        // multiple outer rings inside a single Polygon record. GeoJSON rings
-        // are CCW-outer / CW-hole; Shapefile expects the opposite, so we
-        // reverse every ring as we do for single Polygon.
         const polys = g.coordinates as number[][][][];
         const rings: number[][][] = [];
         for (const poly of polys) {
@@ -398,11 +453,6 @@ async function buildShapefileZip(features: any[], layerName: string): Promise<Bl
 
 // ============================================================================
 // KML WRITER
-// Builds a KML 2.2 document in pure JS from clipped GeoJSON features.
-// Used for the "draw area → download KML" flow so that the client-side
-// clipped features can be exported as real KML (not GeoJSON fallback).
-// GeoJSON coordinates are [lon, lat] which matches KML's "lon,lat" order,
-// so no axis swap is needed. Coordinates are emitted at full precision.
 // ============================================================================
 
 function kmlEscape(str: string): string {
@@ -698,9 +748,9 @@ const LegendBox = ({ activeLayers, baseUrl, needsProxy, layers }: LegendBoxProps
 };
 
 const BaseMap = () => {
-    const mapRef = useRef<mapboxgl.Map | null>(null);
+    const mapRef = useRef<maplibregl.Map | null>(null);
     const mapContainerRef = useRef<HTMLDivElement>(null);
-    const drawRef = useRef<MapboxDraw | null>(null);
+    const drawRef = useRef<TerraDraw | null>(null);
 
     const [isReady, setIsReady] = useState<boolean>(false);
 
@@ -744,11 +794,12 @@ const BaseMap = () => {
     const [drawingEnabled, setDrawingEnabled] = useState(false);
     const [spatialFilter, setSpatialFilter] = useState<GeoJSON.Geometry | null>(null);
 
-    // --- UI state for basemap switcher and panel collapse ---------------------
     const [activeBasemap, setActiveBasemap] = useState<'light' | 'dark' | 'satellite'>('light');
     const [serverPanelCollapsed, setServerPanelCollapsed] = useState(false);
     const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
-    // ---------------------------------------------------------------------------
+
+    const spatialFilterRef = useRef<GeoJSON.Geometry | null>(null);
+    useEffect(() => { spatialFilterRef.current = spatialFilter; }, [spatialFilter]);
 
     const filteredServers = SERVER_OPTIONS.filter(server =>
         server.label.toLowerCase().includes(serverSearch.toLowerCase()) ||
@@ -795,7 +846,7 @@ const BaseMap = () => {
         currentServerLayersRef.current.clear();
 
         if (drawRef.current) {
-            drawRef.current.deleteAll();
+            try { drawRef.current.clear(); } catch (e) { }
             setSpatialFilter(null);
             setDrawingEnabled(false);
         }
@@ -862,47 +913,43 @@ const BaseMap = () => {
         }
     }, [selectedLayerForTable]);
 
+    const handleDrawCreateRef = useRef(handleDrawCreate);
+    const handleDrawUpdateRef = useRef(handleDrawUpdate);
+    const handleDrawDeleteRef = useRef(handleDrawDelete);
+
+    useEffect(() => { handleDrawCreateRef.current = handleDrawCreate; }, [handleDrawCreate]);
+    useEffect(() => { handleDrawUpdateRef.current = handleDrawUpdate; }, [handleDrawUpdate]);
+    useEffect(() => { handleDrawDeleteRef.current = handleDrawDelete; }, [handleDrawDelete]);
+
+    // >>> FIX: only promote Terra Draw's own layers (prefixed "td-") to the
+    // very top so the polygon the user is drawing always stays ABOVE every
+    // WMS raster. The previous implementation promoted every non-basemap
+    // layer in iteration order, which pushed WMS layers above the drawing.
     const bringDrawLayersToFront = useCallback(() => {
         if (!mapRef.current) return;
+        const style = mapRef.current.getStyle();
+        if (!style || !style.layers) return;
 
-        const drawLayerIds = [
-            'gl-draw-polygon-fill',
-            'gl-draw-polygon-stroke',
-            'gl-draw-polygon-midpoint',
-            'gl-draw-polygon-vertex',
-            'gl-draw-line',
-            'gl-draw-point',
-            'gl-draw-polygon',
-            'gl-draw-polygon-fill-active',
-            'gl-draw-polygon-stroke-active'
-        ];
-
-        drawLayerIds.forEach(layerId => {
-            if (mapRef.current?.getLayer(layerId)) {
-                mapRef.current.moveLayer(layerId);
-            }
-        });
-
-        const allLayers = mapRef.current.getStyle().layers || [];
-        allLayers.forEach(layer => {
-            if (layer.id.includes('gl-draw') && !drawLayerIds.includes(layer.id)) {
-                if (mapRef.current?.getLayer(layer.id)) {
-                    mapRef.current.moveLayer(layer.id);
+        const ids = style.layers.map((l: any) => l.id as string);
+        ids.forEach((id) => {
+            if (typeof id !== 'string') return;
+            if (!id.startsWith('td-')) return;
+            try {
+                if (mapRef.current?.getLayer(id)) {
+                    mapRef.current.moveLayer(id);
                 }
-            }
+            } catch (e) { }
         });
     }, []);
 
     useEffect(() => {
         if (!mapContainerRef.current) return;
 
-        const theBaseMap = new mapboxgl.Map({
+        const theBaseMap = new maplibregl.Map({
             container: mapContainerRef.current,
             center: [-46.93820917792772, -19.584011291377593],
             zoom: 5,
-            style: 'mapbox://styles/mapbox/light-v11',
-            accessToken: import.meta.env.VITE_MAPBOX_TOKEN,
-            projection: 'mercator'
+            style: LIGHT_STYLE
         });
 
         mapRef.current = theBaseMap;
@@ -910,27 +957,119 @@ const BaseMap = () => {
         theBaseMap.on("load", () => {
             setIsReady(true);
 
-            const draw = new MapboxDraw({
-                displayControlsDefault: false,
-                controls: {
-                    polygon: false,
-                    trash: false
-                }
-            });
+            try {
+                const draw = new TerraDraw({
+                    adapter: new TerraDrawMapLibreGLAdapter({
+                        map: theBaseMap as any
+                    }),
+                    modes: [
+                        new TerraDrawPolygonMode({
+                            styles: {
+                                fillColor: '#EC6A2B',
+                                fillOpacity: 0.3,
+                                outlineColor: '#EC6A2B',
+                                outlineWidth: 3,
+                                outlineOpacity: 1,
 
-            theBaseMap.addControl(draw);
-            drawRef.current = draw;
+                                closingPointColor: '#FFFFFF',
+                                closingPointWidth: 8,
+                                closingPointOutlineColor: '#EC6A2B',
+                                closingPointOutlineWidth: 3,
 
-            theBaseMap.on('draw.create', handleDrawCreate);
-            theBaseMap.on('draw.delete', handleDrawDelete);
-            theBaseMap.on('draw.update', handleDrawUpdate);
+                                coordinatePointColor: '#FFFFFF',
+                                coordinatePointWidth: 8,
+                                coordinatePointOutlineColor: '#EC6A2B',
+                                coordinatePointOutlineWidth: 3,
+
+                                editedPointColor: '#FFFFFF',
+                                editedPointWidth: 8,
+                                editedPointOutlineColor: '#EC6A2B',
+                                editedPointOutlineWidth: 3
+                            }
+                        } as any),
+                        new TerraDrawSelectMode({
+                            flags: {
+                                polygon: {
+                                    feature: {
+                                        draggable: true,
+                                        coordinates: {
+                                            midpoints: true,
+                                            draggable: true,
+                                            deletable: true
+                                        }
+                                    }
+                                }
+                            },
+                            styles: {
+                                selectedPolygonColor: '#EC6A2B',
+                                selectedPolygonFillOpacity: 0.35,
+                                selectedPolygonOutlineColor: '#EC6A2B',
+                                selectedPolygonOutlineWidth: 3,
+
+                                selectionPointColor: '#FFFFFF',
+                                selectionPointWidth: 8,
+                                selectionPointOutlineColor: '#EC6A2B',
+                                selectionPointOutlineWidth: 3
+                            }
+                        } as any)
+                    ]
+                });
+
+                draw.start();
+                draw.setMode('select');
+                drawRef.current = draw;
+
+                setTimeout(() => bringDrawLayersToFront(), 50);
+                setTimeout(() => bringDrawLayersToFront(), 200);
+
+                draw.on('finish', (id: string | number) => {
+                    try {
+                        const snapshot: any[] = draw.getSnapshot();
+                        const feature = snapshot.find((f: any) => f.id === id);
+                        if (feature && feature.geometry && feature.geometry.type === 'Polygon') {
+                            const asGeoJSONFeature = {
+                                type: 'Feature',
+                                properties: feature.properties || {},
+                                geometry: feature.geometry
+                            };
+                            if (spatialFilterRef.current) {
+                                handleDrawUpdateRef.current({ features: [asGeoJSONFeature as any] });
+                            } else {
+                                handleDrawCreateRef.current({ features: [asGeoJSONFeature as any] });
+                            }
+                            try { draw.setMode('select'); } catch (e) { }
+                        }
+                    } catch (e) {
+                        console.warn('Erro no handler de finish:', e);
+                    }
+                    setTimeout(() => bringDrawLayersToFront(), 50);
+                    setTimeout(() => bringDrawLayersToFront(), 200);
+                });
+
+                draw.on('change', () => {
+                    bringDrawLayersToFront();
+
+                    try {
+                        const mode = (draw as any).getMode ? (draw as any).getMode() : null;
+                        if (mode === 'polygon') return;
+                        const snapshot: any[] = draw.getSnapshot();
+                        if (snapshot.length === 0) return;
+                        const poly = snapshot.find((f: any) => f.geometry && f.geometry.type === 'Polygon');
+                        if (poly) {
+                            setSpatialFilter(poly.geometry);
+                        }
+                    } catch (e) { }
+                });
+            } catch (e) {
+                console.warn('Falha ao inicializar Terra Draw:', e);
+            }
 
             setTimeout(() => bringDrawLayersToFront(), 200);
         });
 
         return () => {
             if (drawRef.current) {
-                theBaseMap.removeControl(drawRef.current);
+                try { drawRef.current.stop(); } catch (e) { }
             }
             theBaseMap.remove();
             mapRef.current = null;
@@ -1328,13 +1467,12 @@ const BaseMap = () => {
         if (bbox) fitMapToBBox(bbox);
     };
 
-    // --- basemap switcher ------------------------------------------------------
     const switchBasemap = (type: 'light' | 'dark' | 'satellite') => {
         if (!mapRef.current) return;
-        const styleUrls: Record<string, string> = {
-            light: 'mapbox://styles/mapbox/light-v11',
-            dark: 'mapbox://styles/mapbox/dark-v11',
-            satellite: 'mapbox://styles/mapbox/satellite-v9'
+        const styles: Record<string, any> = {
+            light: LIGHT_STYLE,
+            dark: DARK_STYLE,
+            satellite: SATELLITE_STYLE
         };
 
         const layersToRestore = Array.from(currentServerLayersRef.current);
@@ -1366,10 +1504,9 @@ const BaseMap = () => {
             setTimeout(() => bringDrawLayersToFront(), 300);
         });
 
-        mapRef.current.setStyle(styleUrls[type]);
+        mapRef.current.setStyle(styles[type]);
         setActiveBasemap(type);
     };
-    // ---------------------------------------------------------------------------
 
     const toggleLayer = (layerName: string) => {
         if (!mapRef.current || !isReady) return;
@@ -1667,12 +1804,6 @@ const BaseMap = () => {
 
         if (allSurvivors.length === 0) return [];
 
-        // Keep 1:1 correspondence between input features and output features.
-        // A single clipped MultiLineString feature is returned per original
-        // feature so attributes (LENGTH, ID, etc.) are not duplicated when a
-        // line is cut at the clip boundary into multiple pieces. This matches
-        // what QGIS Dissolve-by-ID would produce, and keeps Shapefile row
-        // counts aligned with GeoJSON row counts.
         if (allSurvivors.length === 1) {
             return [asFeature(
                 { type: 'LineString', coordinates: allSurvivors[0] },
@@ -1869,18 +2000,10 @@ const BaseMap = () => {
         return csvRows.join('\n');
     };
 
-    // --- SHAPEFILE (client-side) --------------------------------------------
-    // Uses our own binary writer (buildShapefileZip at the top of this file).
-    // @mapbox/shp-write was removed because it merges every LineString and
-    // Polygon in a layer into ONE multipart record — that's why QGIS showed
-    // "Features Total: 1" for a layer with 1633 lines. Our writer emits one
-    // record per feature and preserves the full attribute table.
-    // ------------------------------------------------------------------------
     const createShapefileZipBlob = async (features: any[], layerName: string): Promise<Blob> => {
         console.log(`[SHP] input ${features.length} features`);
         return await buildShapefileZip(features, layerName);
     };
-    // ------------------------------------------------------------------------
 
     const downloadLayerByDraw = async (layerName: string, format: 'geojson' | 'shapefile' | 'csv' | 'kml') => {
         if (!spatialFilter || spatialFilter.type !== 'Polygon') {
@@ -2575,16 +2698,16 @@ const BaseMap = () => {
                                                 if (!drawRef.current) return;
 
                                                 if (drawingEnabled) {
-                                                    drawRef.current.deleteAll();
-                                                    drawRef.current.changeMode('simple_select');
+                                                    try { drawRef.current.clear(); } catch (e) { }
+                                                    try { drawRef.current.setMode('select'); } catch (e) { }
                                                     setDrawingEnabled(false);
                                                     setSpatialFilter(null);
                                                 } else {
                                                     if (spatialFilter) {
-                                                        drawRef.current.deleteAll();
+                                                        try { drawRef.current.clear(); } catch (e) { }
                                                         setSpatialFilter(null);
                                                     }
-                                                    drawRef.current.changeMode('draw_polygon');
+                                                    try { drawRef.current.setMode('polygon'); } catch (e) { }
                                                     setDrawingEnabled(true);
                                                 }
 
@@ -2600,10 +2723,10 @@ const BaseMap = () => {
                                                 borderRadius: 4,
                                                 cursor: 'pointer',
                                                 fontWeight: 'bold',
-                                                flex: 1
+                                                flex: 1,
                                             }}
                                         >
-                                            {drawingEnabled ? '🔲 Parar Desenho' : '✏️ Desenhar Área de Interesse'}
+                                            {drawingEnabled ? '#D64A12 Parar Desenho' : '✏️ Desenhar Área de Interesse'}
                                         </button>
                                     </div>
 
@@ -2635,7 +2758,7 @@ const BaseMap = () => {
                                                 <button
                                                     onClick={() => {
                                                         if (drawRef.current) {
-                                                            drawRef.current.deleteAll();
+                                                            try { drawRef.current.clear(); } catch (e) { }
                                                         }
                                                         setSpatialFilter(null);
                                                         setDrawingEnabled(false);
