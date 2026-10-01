@@ -703,6 +703,12 @@ const BaseMap = () => {
     const [drawingEnabled, setDrawingEnabled] = useState(false);
     const [spatialFilter, setSpatialFilter] = useState<GeoJSON.Geometry | null>(null);
 
+    // --- NEW: UI state for basemap switcher and panel collapse -----------------
+    const [activeBasemap, setActiveBasemap] = useState<'light' | 'dark' | 'satellite'>('light');
+    const [serverPanelCollapsed, setServerPanelCollapsed] = useState(false);
+    const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
+    // ---------------------------------------------------------------------------
+
     const filteredServers = SERVER_OPTIONS.filter(server =>
         server.label.toLowerCase().includes(serverSearch.toLowerCase()) ||
         server.url.toLowerCase().includes(serverSearch.toLowerCase())
@@ -1280,6 +1286,49 @@ const BaseMap = () => {
         const bbox = bboxFromFeatures(features);
         if (bbox) fitMapToBBox(bbox);
     };
+
+    // --- NEW: basemap switcher --------------------------------------------------
+    const switchBasemap = (type: 'light' | 'dark' | 'satellite') => {
+        if (!mapRef.current) return;
+        const styleUrls: Record<string, string> = {
+            light: 'mapbox://styles/mapbox/light-v11',
+            dark: 'mapbox://styles/mapbox/dark-v11',
+            satellite: 'mapbox://styles/mapbox/satellite-v9'
+        };
+
+        const layersToRestore = Array.from(currentServerLayersRef.current);
+
+        mapRef.current.once('style.load', () => {
+            if (!mapRef.current) return;
+            layersToRestore.forEach(layerName => {
+                try {
+                    if (!mapRef.current!.getSource(layerName)) {
+                        const wmsUrl = `${baseUrl}?service=WMS&version=1.3.0&request=GetMap&layers=${layerName}&styles=&format=image/png&transparent=true&width=256&height=256&crs=EPSG:3857&bbox={bbox-epsg-3857}`;
+                        const tileUrl = needsProxy ? `${CORS_PROXY}${encodeURIComponent(wmsUrl)}` : wmsUrl;
+                        mapRef.current!.addSource(layerName, {
+                            type: 'raster',
+                            tiles: [tileUrl],
+                            tileSize: 256
+                        });
+                        mapRef.current!.addLayer({
+                            id: layerName,
+                            type: 'raster',
+                            source: layerName,
+                            paint: { 'raster-opacity': 0.7 }
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Erro ao restaurar camada após mudança de estilo:', e);
+                }
+            });
+            setTimeout(() => bringDrawLayersToFront(), 100);
+            setTimeout(() => bringDrawLayersToFront(), 300);
+        });
+
+        mapRef.current.setStyle(styleUrls[type]);
+        setActiveBasemap(type);
+    };
+    // ---------------------------------------------------------------------------
 
     const toggleLayer = (layerName: string) => {
         if (!mapRef.current || !isReady) return;
@@ -2005,6 +2054,37 @@ const BaseMap = () => {
         }}>
             <div style={{ height: '100vh' }} ref={mapContainerRef} />
 
+            <button
+                onClick={() => {
+                    if (!mapRef.current) return;
+                    mapRef.current.fitBounds(
+                        [[-73.99, -33.75], [-28.84, 5.27]],
+                        { padding: 40, duration: 1000 }
+                    );
+                }}
+                title="Zoom para o Brasil"
+                style={{
+                    position: 'absolute',
+                    top: 10,
+                    left: 370,
+                    zIndex: 1000,
+                    padding: '8px 14px',
+                    backgroundColor: 'white',
+                    color: '#3B3B3B',
+                    border: '1px solid #E0E0E0',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    fontWeight: 'bold',
+                    fontSize: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                }}
+            >
+                🇧🇷 Brasil
+            </button>
+
             {showServerPanel && (
                 <div style={{
                     position: 'absolute',
@@ -2022,7 +2102,7 @@ const BaseMap = () => {
                 }}>
                     <div style={{
                         padding: 15,
-                        borderBottom: '1px solid #F0F0F0',
+                        borderBottom: serverPanelCollapsed ? 'none' : '1px solid #F0F0F0',
                         borderTopLeftRadius: 8,
                         borderTopRightRadius: 8,
                         backgroundColor: 'white'
@@ -2031,196 +2111,274 @@ const BaseMap = () => {
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center',
-                            marginBottom: 10
+                            marginBottom: serverPanelCollapsed ? 0 : 10
                         }}>
                             <div style={{ fontWeight: 'bold', fontSize: 14, color: '#3B3B3B' }}>Configuração do Servidor</div>
-                            <button
-                                onClick={() => setShowServerPanel(false)}
-                                style={{
-                                    border: 'none',
-                                    background: 'none',
-                                    cursor: 'pointer',
-                                    fontSize: 16,
-                                    padding: '0 4px',
-                                    color: '#666'
-                                }}
-                            >
-                                ✕
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <button
+                                    onClick={() => setServerPanelCollapsed(!serverPanelCollapsed)}
+                                    title={serverPanelCollapsed ? 'Expandir' : 'Recolher'}
+                                    style={{
+                                        border: 'none',
+                                        background: 'none',
+                                        cursor: 'pointer',
+                                        fontSize: 14,
+                                        padding: '0 4px',
+                                        color: '#666',
+                                        lineHeight: 1
+                                    }}
+                                >
+                                    {serverPanelCollapsed ? '▼' : '▲'}
+                                </button>
+                                <button
+                                    onClick={() => setShowServerPanel(false)}
+                                    style={{
+                                        border: 'none',
+                                        background: 'none',
+                                        cursor: 'pointer',
+                                        fontSize: 16,
+                                        padding: '0 4px',
+                                        color: '#666'
+                                    }}
+                                >
+                                    ✕
+                                </button>
+                            </div>
                         </div>
 
-                        <div style={{ position: 'relative', marginBottom: 10 }}>
-                            <span style={{
-                                position: 'absolute',
-                                left: 10,
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                fontSize: 14,
-                                color: '#999',
-                                pointerEvents: 'none'
-                            }}>
-                                🔍
-                            </span>
-                            <input
-                                type="text"
-                                value={serverSearch}
-                                onChange={(e) => {
-                                    setServerSearch(e.target.value);
-                                    setShowDropdown(true);
-                                }}
-                                onFocus={() => setShowDropdown(true)}
-                                placeholder="Pesquisar servidores"
-                                style={{
-                                    width: '100%',
-                                    padding: '8px 10px 8px 32px',
-                                    borderRadius: 4,
-                                    border: '1px solid #E0E0E0',
-                                    fontSize: 12,
-                                    boxSizing: 'border-box',
-                                    color: '#3B3B3B'
-                                }}
-                            />
-                        </div>
-
-                        {serverSearch && showDropdown ? (
-                            <div style={{
-                                maxHeight: 200,
-                                overflowY: 'auto',
-                                marginBottom: 10,
-                                border: '1px solid #E0E0E0',
-                                borderRadius: 4
-                            }}>
-                                {filteredServers.map(server => (
-                                    <div
-                                        key={server.label}
-                                        onClick={() => handleServerChange(server)}
+                        {!serverPanelCollapsed && (
+                            <>
+                                <div style={{ position: 'relative', marginBottom: 10 }}>
+                                    <span style={{
+                                        position: 'absolute',
+                                        left: 10,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        fontSize: 14,
+                                        color: '#999',
+                                        pointerEvents: 'none'
+                                    }}>
+                                        🔍
+                                    </span>
+                                    <input
+                                        type="text"
+                                        value={serverSearch}
+                                        onChange={(e) => {
+                                            setServerSearch(e.target.value);
+                                            setShowDropdown(true);
+                                        }}
+                                        onFocus={() => setShowDropdown(true)}
+                                        placeholder="Pesquisar servidores"
                                         style={{
-                                            padding: '8px 10px',
-                                            cursor: 'pointer',
+                                            width: '100%',
+                                            padding: '8px 10px 8px 32px',
+                                            borderRadius: 4,
+                                            border: '1px solid #E0E0E0',
                                             fontSize: 12,
-                                            backgroundColor: selectedServer.label === server.label ? '#FFF5F0' : 'white',
-                                            borderBottom: '1px solid #F0F0F0'
+                                            boxSizing: 'border-box',
+                                            color: '#3B3B3B'
                                         }}
-                                        onMouseEnter={(e) => {
-                                            (e.target as HTMLElement).style.backgroundColor = '#F5F5F5';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            (e.target as HTMLElement).style.backgroundColor =
-                                                selectedServer.label === server.label ? '#FFF5F0' : 'white';
-                                        }}
-                                    >
-                                        <div style={{ fontWeight: 500, color: '#3B3B3B' }}>{server.label}</div>
-                                        {server.url && (
-                                            <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
-                                                {server.url}
+                                    />
+                                </div>
+
+                                {serverSearch && showDropdown ? (
+                                    <div style={{
+                                        maxHeight: 200,
+                                        overflowY: 'auto',
+                                        marginBottom: 10,
+                                        border: '1px solid #E0E0E0',
+                                        borderRadius: 4
+                                    }}>
+                                        {filteredServers.map(server => (
+                                            <div
+                                                key={server.label}
+                                                onClick={() => handleServerChange(server)}
+                                                style={{
+                                                    padding: '8px 10px',
+                                                    cursor: 'pointer',
+                                                    fontSize: 12,
+                                                    backgroundColor: selectedServer.label === server.label ? '#FFF5F0' : 'white',
+                                                    borderBottom: '1px solid #F0F0F0'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    (e.target as HTMLElement).style.backgroundColor = '#F5F5F5';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    (e.target as HTMLElement).style.backgroundColor =
+                                                        selectedServer.label === server.label ? '#FFF5F0' : 'white';
+                                                }}
+                                            >
+                                                <div style={{ fontWeight: 500, color: '#3B3B3B' }}>{server.label}</div>
+                                                {server.url && (
+                                                    <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
+                                                        {server.url}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                        {filteredServers.length === 0 && (
+                                            <div style={{ padding: '10px', fontSize: 12, color: '#999', textAlign: 'center' }}>
+                                                Nenhum servidor encontrado
                                             </div>
                                         )}
                                     </div>
-                                ))}
-                                {filteredServers.length === 0 && (
-                                    <div style={{ padding: '10px', fontSize: 12, color: '#999', textAlign: 'center' }}>
-                                        Nenhum servidor encontrado
+                                ) : (
+                                    <select
+                                        value={selectedServer.label}
+                                        onChange={(e) => {
+                                            const server = SERVER_OPTIONS.find(s => s.label === e.target.value);
+                                            if (server) handleServerChange(server);
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px',
+                                            marginBottom: 10,
+                                            borderRadius: 4,
+                                            border: '1px solid #E0E0E0',
+                                            boxSizing: 'border-box',
+                                            color: '#3B3B3B'
+                                        }}
+                                    >
+                                        {SERVER_OPTIONS.map(server => (
+                                            <option key={server.label} value={server.label}>
+                                                {server.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+
+                                {selectedServer.label === 'Personalizado' && (
+                                    <div>
+                                        <input
+                                            type="text"
+                                            value={customUrl}
+                                            onChange={(e) => setCustomUrl(e.target.value)}
+                                            placeholder="Cole sua URL WMS ou WFS aqui..."
+                                            style={{
+                                                width: '100%',
+                                                padding: '8px',
+                                                marginBottom: 5,
+                                                borderRadius: 4,
+                                                border: '1px solid #E0E0E0',
+                                                fontSize: 12,
+                                                boxSizing: 'border-box',
+                                                color: '#3B3B3B'
+                                            }}
+                                            onKeyPress={(e) => {
+                                                if (e.key === 'Enter') handleCustomUrlSubmit();
+                                            }}
+                                        />
+                                        <button
+                                            onClick={handleCustomUrlSubmit}
+                                            style={{
+                                                width: '100%',
+                                                padding: '8px',
+                                                backgroundColor: '#EC6A2B',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: 4,
+                                                cursor: 'pointer',
+                                                fontWeight: 'bold'
+                                            }}
+                                        >
+                                            Conectar ao Servidor Personalizado
+                                        </button>
                                     </div>
                                 )}
-                            </div>
-                        ) : (
-                            <select
-                                value={selectedServer.label}
-                                onChange={(e) => {
-                                    const server = SERVER_OPTIONS.find(s => s.label === e.target.value);
-                                    if (server) handleServerChange(server);
-                                }}
-                                style={{
-                                    width: '100%',
-                                    padding: '8px',
-                                    marginBottom: 10,
-                                    borderRadius: 4,
-                                    border: '1px solid #E0E0E0',
-                                    boxSizing: 'border-box',
-                                    color: '#3B3B3B'
-                                }}
-                            >
-                                {SERVER_OPTIONS.map(server => (
-                                    <option key={server.label} value={server.label}>
-                                        {server.label}
-                                    </option>
-                                ))}
-                            </select>
-                        )}
 
-                        {selectedServer.label === 'Personalizado' && (
-                            <div>
-                                <input
-                                    type="text"
-                                    value={customUrl}
-                                    onChange={(e) => setCustomUrl(e.target.value)}
-                                    placeholder="Cole sua URL WMS ou WFS aqui..."
-                                    style={{
-                                        width: '100%',
-                                        padding: '8px',
-                                        marginBottom: 5,
-                                        borderRadius: 4,
-                                        border: '1px solid #E0E0E0',
-                                        fontSize: 12,
-                                        boxSizing: 'border-box',
-                                        color: '#3B3B3B'
-                                    }}
-                                    onKeyPress={(e) => {
-                                        if (e.key === 'Enter') handleCustomUrlSubmit();
-                                    }}
-                                />
-                                <button
-                                    onClick={handleCustomUrlSubmit}
-                                    style={{
-                                        width: '100%',
-                                        padding: '8px',
-                                        backgroundColor: '#EC6A2B',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: 4,
-                                        cursor: 'pointer',
-                                        fontWeight: 'bold'
-                                    }}
-                                >
-                                    Conectar ao Servidor Personalizado
-                                </button>
-                            </div>
-                        )}
+                                {geoserverUrl && (
+                                    <div style={{ marginTop: 10 }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 8,
+                                            fontSize: 11,
+                                            color: '#666',
+                                            wordBreak: 'break-all',
+                                            padding: '8px',
+                                            backgroundColor: '#F8F8F8',
+                                            borderRadius: 4,
+                                            marginBottom: 5
+                                        }}>
+                                            <div style={{
+                                                width: 10,
+                                                height: 10,
+                                                borderRadius: '50%',
+                                                backgroundColor: getStatusColor(),
+                                                flexShrink: 0
+                                            }} />
+                                            <span>{geoserverUrl}</span>
+                                        </div>
+                                        <div style={{ fontSize: 11, color: getStatusColor(), fontWeight: 'bold' }}>
+                                            {connectionStatus === 'connected' && `✓ Conectado ${needsProxy ? '(proxy)' : '(direto)'}`}
+                                            {connectionStatus === 'connecting' && '⟳ Conectando...'}
+                                            {connectionStatus === 'error' && '✗ Falha na conexão'}
+                                            {connectionStatus === 'idle' && 'Não conectado'}
+                                        </div>
 
-                        {geoserverUrl && (
-                            <div style={{ marginTop: 10 }}>
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 8,
-                                    fontSize: 11,
-                                    color: '#666',
-                                    wordBreak: 'break-all',
-                                    padding: '8px',
-                                    backgroundColor: '#F8F8F8',
-                                    borderRadius: 4,
-                                    marginBottom: 5
-                                }}>
-                                    <div style={{
-                                        width: 10,
-                                        height: 10,
-                                        borderRadius: '50%',
-                                        backgroundColor: getStatusColor(),
-                                        flexShrink: 0
-                                    }} />
-                                    <span>{geoserverUrl}</span>
-                                </div>
-                                <div style={{ fontSize: 11, color: getStatusColor(), fontWeight: 'bold' }}>
-                                    {connectionStatus === 'connected' && `✓ Conectado ${needsProxy ? '(proxy)' : '(direto)'}`}
-                                    {connectionStatus === 'connecting' && '⟳ Conectando...'}
-                                    {connectionStatus === 'error' && '✗ Falha na conexão'}
-                                    {connectionStatus === 'idle' && 'Não conectado'}
-                                </div>
-                            </div>
+                                        {/* NEW: basemap switcher */}
+                                        <div style={{ marginTop: 10 }}>
+                                            <div style={{ fontWeight: 'bold', fontSize: 12, color: '#3B3B3B' }}>
+                                                MAPA BASE
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 4 }}>
+                                                <button
+                                                    onClick={() => switchBasemap('light')}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '6px 4px',
+                                                        fontSize: 11,
+                                                        backgroundColor: activeBasemap === 'light' ? '#EC6A2B' : 'white',
+                                                        color: activeBasemap === 'light' ? 'white' : '#3B3B3B',
+                                                        border: '1px solid ' + (activeBasemap === 'light' ? '#EC6A2B' : '#E0E0E0'),
+                                                        borderRadius: 4,
+                                                        cursor: 'pointer',
+                                                        fontWeight: 'bold'
+                                                    }}
+                                                >
+                                                    ☀️ Claro
+                                                </button>
+                                                <button
+                                                    onClick={() => switchBasemap('dark')}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '6px 4px',
+                                                        fontSize: 11,
+                                                        backgroundColor: activeBasemap === 'dark' ? '#EC6A2B' : 'white',
+                                                        color: activeBasemap === 'dark' ? 'white' : '#3B3B3B',
+                                                        border: '1px solid ' + (activeBasemap === 'dark' ? '#EC6A2B' : '#E0E0E0'),
+                                                        borderRadius: 4,
+                                                        cursor: 'pointer',
+                                                        fontWeight: 'bold'
+                                                    }}
+                                                >
+                                                    🌙 Escuro
+                                                </button>
+                                                <button
+                                                    onClick={() => switchBasemap('satellite')}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '6px 4px',
+                                                        fontSize: 11,
+                                                        backgroundColor: activeBasemap === 'satellite' ? '#EC6A2B' : 'white',
+                                                        color: activeBasemap === 'satellite' ? 'white' : '#3B3B3B',
+                                                        border: '1px solid ' + (activeBasemap === 'satellite' ? '#EC6A2B' : '#E0E0E0'),
+                                                        borderRadius: 4,
+                                                        cursor: 'pointer',
+                                                        fontWeight: 'bold'
+                                                    }}
+                                                >
+                                                    🛰️ Satélite
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
 
-                    {isReady && geoserverUrl && activeLayers.size > 0 && (
+                    {!serverPanelCollapsed && isReady && geoserverUrl && activeLayers.size > 0 && (
                         <LegendBox
                             activeLayers={activeLayers}
                             baseUrl={baseUrl}
@@ -2270,7 +2428,7 @@ const BaseMap = () => {
                 }}>
                     <div style={{
                         padding: '0',
-                        borderBottom: '1px solid #F0F0F0',
+                        borderBottom: layersPanelCollapsed ? 'none' : '1px solid #F0F0F0',
                         backgroundColor: '#FFFFFF',
                         borderRadius: '8px 8px 0 0',
                     }}>
@@ -2334,513 +2492,387 @@ const BaseMap = () => {
                                     </span>
                                 )}
                             </button>
+                            <button
+                                onClick={() => setLayersPanelCollapsed(!layersPanelCollapsed)}
+                                title={layersPanelCollapsed ? 'Expandir' : 'Recolher'}
+                                style={{
+                                    padding: '12px 10px',
+                                    border: 'none',
+                                    background: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: 13,
+                                    color: '#666',
+                                    marginBottom: '-2px',
+                                    lineHeight: 1
+                                }}
+                            >
+                                {layersPanelCollapsed ? '▼' : '▲'}
+                            </button>
                         </div>
 
-                        <div style={{
-                            padding: '10px 15px',
-                            backgroundColor: spatialFilter ? '#FFF5F0' : '#fff',
-                            borderBottom: '1px solid #F0F0F0'
-                        }}>
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginBottom: spatialFilter ? 8 : 0
-                            }}>
-                                <button
-                                    onClick={() => {
-                                        if (!drawRef.current) return;
-
-                                        if (drawingEnabled) {
-                                            drawRef.current.deleteAll();
-                                            drawRef.current.changeMode('simple_select');
-                                            setDrawingEnabled(false);
-                                            setSpatialFilter(null);
-                                        } else {
-                                            if (spatialFilter) {
-                                                drawRef.current.deleteAll();
-                                                setSpatialFilter(null);
-                                            }
-                                            drawRef.current.changeMode('draw_polygon');
-                                            setDrawingEnabled(true);
-                                        }
-
-                                        setTimeout(() => bringDrawLayersToFront(), 50);
-                                        setTimeout(() => bringDrawLayersToFront(), 200);
-                                    }}
-                                    style={{
-                                        padding: '6px 12px',
-                                        fontSize: 11,
-                                        backgroundColor: drawingEnabled ? '#D64A12' : '#EC6A2B',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: 4,
-                                        cursor: 'pointer',
-                                        fontWeight: 'bold',
-                                        flex: 1
-                                    }}
-                                >
-                                    {drawingEnabled ? '🔲 Parar Desenho' : '✏️ Desenhar Área de Interesse'}
-                                </button>
-                            </div>
-
-                            {spatialFilter && (
-                                <div style={{ marginTop: 8 }}>
+                        {!layersPanelCollapsed && (
+                            <>
+                                <div style={{
+                                    padding: '10px 15px',
+                                    backgroundColor: spatialFilter ? '#FFF5F0' : '#fff',
+                                    borderBottom: '1px solid #F0F0F0'
+                                }}>
                                     <div style={{
-                                        fontSize: 11,
-                                        color: '#D64A12',
-                                        fontWeight: 'bold',
-                                        marginBottom: 8,
-                                        textAlign: 'center',
-                                        backgroundColor: '#FFF5F0',
-                                        padding: '4px',
-                                        borderRadius: 3
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        marginBottom: spatialFilter ? 8 : 0
                                     }}>
-                                        ✅ Área de filtro ativa - Downloads serão limitados a esta área
-                                    </div>
-
-                                    <div style={{
-                                        fontSize: 10,
-                                        color: '#666',
-                                        marginBottom: 8,
-                                        textAlign: 'center'
-                                    }}>
-                                        Selecione uma camada abaixo para baixar apenas os dados desta área
-                                    </div>
-
-                                    <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
                                         <button
                                             onClick={() => {
-                                                if (drawRef.current) {
+                                                if (!drawRef.current) return;
+
+                                                if (drawingEnabled) {
                                                     drawRef.current.deleteAll();
-                                                }
-                                                setSpatialFilter(null);
-                                                setDrawingEnabled(false);
-                                                if (selectedLayerForTable) {
-                                                    openAttributeTable(selectedLayerForTable);
+                                                    drawRef.current.changeMode('simple_select');
+                                                    setDrawingEnabled(false);
+                                                    setSpatialFilter(null);
+                                                } else {
+                                                    if (spatialFilter) {
+                                                        drawRef.current.deleteAll();
+                                                        setSpatialFilter(null);
+                                                    }
+                                                    drawRef.current.changeMode('draw_polygon');
+                                                    setDrawingEnabled(true);
                                                 }
 
                                                 setTimeout(() => bringDrawLayersToFront(), 50);
+                                                setTimeout(() => bringDrawLayersToFront(), 200);
                                             }}
                                             style={{
-                                                flex: 1,
+                                                padding: '6px 12px',
+                                                fontSize: 11,
+                                                backgroundColor: drawingEnabled ? '#D64A12' : '#EC6A2B',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: 4,
+                                                cursor: 'pointer',
+                                                fontWeight: 'bold',
+                                                flex: 1
+                                            }}
+                                        >
+                                            {drawingEnabled ? '🔲 Parar Desenho' : '✏️ Desenhar Área de Interesse'}
+                                        </button>
+                                    </div>
+
+                                    {spatialFilter && (
+                                        <div style={{ marginTop: 8 }}>
+                                            <div style={{
+                                                fontSize: 11,
+                                                color: '#D64A12',
+                                                fontWeight: 'bold',
+                                                marginBottom: 8,
+                                                textAlign: 'center',
+                                                backgroundColor: '#FFF5F0',
                                                 padding: '4px',
+                                                borderRadius: 3
+                                            }}>
+                                                ✅ Área de filtro ativa - Downloads serão limitados a esta área
+                                            </div>
+
+                                            <div style={{
                                                 fontSize: 10,
+                                                color: '#666',
+                                                marginBottom: 8,
+                                                textAlign: 'center'
+                                            }}>
+                                                Selecione uma camada abaixo para baixar apenas os dados desta área
+                                            </div>
+
+                                            <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                                                <button
+                                                    onClick={() => {
+                                                        if (drawRef.current) {
+                                                            drawRef.current.deleteAll();
+                                                        }
+                                                        setSpatialFilter(null);
+                                                        setDrawingEnabled(false);
+                                                        if (selectedLayerForTable) {
+                                                            openAttributeTable(selectedLayerForTable);
+                                                        }
+
+                                                        setTimeout(() => bringDrawLayersToFront(), 50);
+                                                    }}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '4px',
+                                                        fontSize: 10,
+                                                        backgroundColor: '#EF5350',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: 3,
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    🗑️ Limpar Área
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {activeLayers.size > 0 && spatialFilter && (
+                                    <div style={{ padding: '10px', backgroundColor: '#FFF5F0' }}>
+                                        <div style={{
+                                            fontSize: 12,
+                                            fontWeight: 'bold',
+                                            color: '#D64A12',
+                                            marginBottom: 8,
+                                            textAlign: 'center'
+                                        }}>
+                                            🎯 Baixar dados da área selecionada:
+                                        </div>
+                                        {activeLayersList.map(layer => (
+                                            <div key={layer.name} style={{
+                                                padding: '8px',
+                                                backgroundColor: 'white',
+                                                marginBottom: 5,
+                                                borderRadius: 4,
+                                                border: '2px solid #EC6A2B'
+                                            }}>
+                                                <div style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 5, color: '#3B3B3B' }}>
+                                                    {layer.title}
+                                                </div>
+                                                <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            downloadLayerByDraw(layer.name, 'geojson');
+                                                        }}
+                                                        disabled={downloadingLayer === layer.name}
+                                                        style={{
+                                                            padding: '4px 8px',
+                                                            fontSize: 9,
+                                                            backgroundColor: '#EC6A2B',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: 3,
+                                                            cursor: 'pointer',
+                                                            opacity: downloadingLayer === layer.name ? 0.7 : 1,
+                                                            fontWeight: 'bold'
+                                                        }}
+                                                    >
+                                                        {downloadingLayer === layer.name ? '...' : '📦 GeoJSON'}
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            downloadLayerByDraw(layer.name, 'shapefile');
+                                                        }}
+                                                        disabled={downloadingLayer === layer.name}
+                                                        style={{
+                                                            padding: '4px 8px',
+                                                            fontSize: 9,
+                                                            backgroundColor: '#D64A12',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: 3,
+                                                            cursor: 'pointer',
+                                                            opacity: downloadingLayer === layer.name ? 0.7 : 1,
+                                                            fontWeight: 'bold'
+                                                        }}
+                                                    >
+                                                        {downloadingLayer === layer.name ? '...' : '📦 SHP'}
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            downloadLayerByDraw(layer.name, 'csv');
+                                                        }}
+                                                        disabled={downloadingLayer === layer.name}
+                                                        style={{
+                                                            padding: '4px 8px',
+                                                            fontSize: 9,
+                                                            backgroundColor: '#FF9800',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: 3,
+                                                            cursor: 'pointer',
+                                                            opacity: downloadingLayer === layer.name ? 0.7 : 1,
+                                                            fontWeight: 'bold'
+                                                        }}
+                                                    >
+                                                        {downloadingLayer === layer.name ? '...' : '📦 CSV'}
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            downloadLayerByDraw(layer.name, 'kml');
+                                                        }}
+                                                        disabled={downloadingLayer === layer.name}
+                                                        style={{
+                                                            padding: '4px 8px',
+                                                            fontSize: 9,
+                                                            backgroundColor: '#E91E63',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: 3,
+                                                            cursor: 'pointer',
+                                                            opacity: downloadingLayer === layer.name ? 0.7 : 1,
+                                                            fontWeight: 'bold'
+                                                        }}
+                                                    >
+                                                        {downloadingLayer === layer.name ? '...' : '📦 KML'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {activeTab === 'selected' && activeLayers.size > 0 && (
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'flex-start',
+                                        alignItems: 'center',
+                                        padding: '10px 15px',
+                                        gap: 6
+                                    }}>
+                                        <button
+                                            onClick={removeAllLayers}
+                                            style={{
+                                                padding: '4px 12px',
+                                                fontSize: 11,
                                                 backgroundColor: '#EF5350',
                                                 color: 'white',
                                                 border: 'none',
-                                                borderRadius: 3,
-                                                cursor: 'pointer'
+                                                borderRadius: 4,
+                                                cursor: 'pointer',
+                                                fontWeight: 'bold'
                                             }}
                                         >
-                                            🗑️ Limpar Área
+                                            🗑️ Remover Todas
                                         </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {activeLayers.size > 0 && spatialFilter && (
-                            <div style={{ padding: '10px', backgroundColor: '#FFF5F0' }}>
-                                <div style={{
-                                    fontSize: 12,
-                                    fontWeight: 'bold',
-                                    color: '#D64A12',
-                                    marginBottom: 8,
-                                    textAlign: 'center'
-                                }}>
-                                    🎯 Baixar dados da área selecionada:
-                                </div>
-                                {activeLayersList.map(layer => (
-                                    <div key={layer.name} style={{
-                                        padding: '8px',
-                                        backgroundColor: 'white',
-                                        marginBottom: 5,
-                                        borderRadius: 4,
-                                        border: '2px solid #EC6A2B'
-                                    }}>
-                                        <div style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 5, color: '#3B3B3B' }}>
-                                            {layer.title}
-                                        </div>
-                                        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    downloadLayerByDraw(layer.name, 'geojson');
-                                                }}
-                                                disabled={downloadingLayer === layer.name}
-                                                style={{
-                                                    padding: '4px 8px',
-                                                    fontSize: 9,
-                                                    backgroundColor: '#EC6A2B',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: 3,
-                                                    cursor: 'pointer',
-                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1,
-                                                    fontWeight: 'bold'
-                                                }}
-                                            >
-                                                {downloadingLayer === layer.name ? '...' : '📦 GeoJSON'}
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    downloadLayerByDraw(layer.name, 'shapefile');
-                                                }}
-                                                disabled={downloadingLayer === layer.name}
-                                                style={{
-                                                    padding: '4px 8px',
-                                                    fontSize: 9,
-                                                    backgroundColor: '#D64A12',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: 3,
-                                                    cursor: 'pointer',
-                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1,
-                                                    fontWeight: 'bold'
-                                                }}
-                                            >
-                                                {downloadingLayer === layer.name ? '...' : '📦 SHP'}
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    downloadLayerByDraw(layer.name, 'csv');
-                                                }}
-                                                disabled={downloadingLayer === layer.name}
-                                                style={{
-                                                    padding: '4px 8px',
-                                                    fontSize: 9,
-                                                    backgroundColor: '#FF9800',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: 3,
-                                                    cursor: 'pointer',
-                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1,
-                                                    fontWeight: 'bold'
-                                                }}
-                                            >
-                                                {downloadingLayer === layer.name ? '...' : '📦 CSV'}
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    downloadLayerByDraw(layer.name, 'kml');
-                                                }}
-                                                disabled={downloadingLayer === layer.name}
-                                                style={{
-                                                    padding: '4px 8px',
-                                                    fontSize: 9,
-                                                    backgroundColor: '#E91E63',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: 3,
-                                                    cursor: 'pointer',
-                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1,
-                                                    fontWeight: 'bold'
-                                                }}
-                                            >
-                                                {downloadingLayer === layer.name ? '...' : '📦 KML'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {activeTab === 'selected' && activeLayers.size > 0 && (
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'flex-start',
-                                alignItems: 'center',
-                                padding: '10px 15px',
-                                gap: 6
-                            }}>
-                                <button
-                                    onClick={removeAllLayers}
-                                    style={{
-                                        padding: '4px 12px',
-                                        fontSize: 11,
-                                        backgroundColor: '#EF5350',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: 4,
-                                        cursor: 'pointer',
-                                        fontWeight: 'bold'
-                                    }}
-                                >
-                                    🗑️ Remover Todas
-                                </button>
-                                <button
-                                    onClick={zoomToAllActiveLayers}
-                                    style={{
-                                        padding: '4px 12px',
-                                        fontSize: 11,
-                                        backgroundColor: '#2196F3',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: 4,
-                                        cursor: 'pointer',
-                                        fontWeight: 'bold'
-                                    }}
-                                    title="Zoom para a extensão de todas as camadas ativas"
-                                >
-                                    🔍 Zoom a Todas
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    <div style={{ padding: '10px', borderBottom: '1px solid #F0F0F0' }}>
-                        <div style={{ position: 'relative' }}>
-                            <span style={{
-                                position: 'absolute',
-                                left: 10,
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                fontSize: 14,
-                                color: '#999',
-                                pointerEvents: 'none'
-                            }}>
-                                🔍
-                            </span>
-                            <input
-                                type="text"
-                                value={layerSearch}
-                                onChange={(e) => setLayerSearch(e.target.value)}
-                                placeholder={activeTab === 'selected' ? "Pesquisar camadas selecionadas" : "Pesquisar todas as camadas"}
-                                style={{
-                                    width: '100%',
-                                    padding: '8px 10px 8px 32px',
-                                    borderRadius: 4,
-                                    border: '1px solid #E0E0E0',
-                                    fontSize: 12,
-                                    boxSizing: 'border-box',
-                                    color: '#3B3B3B'
-                                }}
-                            />
-                            {layerSearch && (
-                                <button
-                                    onClick={() => setLayerSearch('')}
-                                    style={{
-                                        position: 'absolute',
-                                        right: 8,
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        border: 'none',
-                                        background: 'none',
-                                        cursor: 'pointer',
-                                        fontSize: 14,
-                                        color: '#999',
-                                        padding: '0 4px'
-                                    }}
-                                >
-                                    ✕
-                                </button>
-                            )}
-                        </div>
-                        {layerSearch && (
-                            <div style={{ fontSize: 10, color: '#888', marginTop: 4 }}>
-                                Mostrando {activeTab === 'selected' ? filteredActiveLayers.length : filteredLayers.length} de {activeTab === 'selected' ? activeLayers.size : layers.length} camadas correspondendo a "{layerSearch}"
-                            </div>
-                        )}
-                    </div>
-
-                    <div style={{ overflowY: 'auto', flex: 1, padding: '10px' }}>
-                        {loading && <div style={{ padding: '10px', color: '#666' }}>Carregando camadas...</div>}
-
-                        {error && (
-                            <div style={{ padding: '10px' }}>
-                                <div style={{ color: '#EF5350', marginBottom: 10, fontSize: 13 }}>{error}</div>
-                                <button
-                                    onClick={() => fetchLayers(baseUrl)}
-                                    style={{
-                                        padding: '8px 15px',
-                                        backgroundColor: '#EC6A2B',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: 4,
-                                        cursor: 'pointer',
-                                        width: '100%'
-                                    }}
-                                >
-                                    Tentar Novamente
-                                </button>
-                            </div>
-                        )}
-
-                        {!loading && !error && activeTab === 'all' && (
-                            <>
-                                {filteredLayers.map((layer) => (
-                                    <div
-                                        key={layer.name}
-                                        style={{
-                                            padding: '10px',
-                                            margin: '5px 0',
-                                            borderRadius: 6,
-                                            backgroundColor: activeLayers.has(layer.name) ? '#FFF5F0' : '#F8F8F8',
-                                            border: activeLayers.has(layer.name) ? '2px solid #EC6A2B' : '1px solid transparent',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={activeLayers.has(layer.name)}
-                                                onChange={() => toggleLayer(layer.name)}
-                                                style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
-                                            />
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontWeight: 500, fontSize: 13, color: '#3B3B3B' }}>
-                                                    {layerSearch ? (
-                                                        <span
-                                                            dangerouslySetInnerHTML={{
-                                                                __html: layer.title.replace(
-                                                                    new RegExp(`(${layerSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
-                                                                    '<mark style="background-color: #FFF5F0; padding: 0 2px;">$1</mark>'
-                                                                )
-                                                            }}
-                                                        />
-                                                    ) : (
-                                                        layer.title
-                                                    )}
-                                                </div>
-                                                {layer.abstract && (
-                                                    <div style={{ fontSize: 11, color: '#888', marginTop: 3 }}>
-                                                        {layer.abstract.length > 80 ? layer.abstract.substring(0, 80) + '...' : layer.abstract}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <div style={{ display: 'flex', gap: 4, marginLeft: 28, flexWrap: 'wrap' }}>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); openAttributeTable(layer.name); }}
-                                                style={{
-                                                    padding: '4px 10px',
-                                                    fontSize: 10,
-                                                    backgroundColor: '#9C27B0',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: 3,
-                                                    cursor: 'pointer',
-                                                    fontWeight: 'bold'
-                                                }}
-                                            >
-                                                📊 Abrir Tabela
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'geojson'); }}
-                                                disabled={downloadingLayer === layer.name}
-                                                style={{
-                                                    padding: '4px 10px',
-                                                    fontSize: 10,
-                                                    backgroundColor: '#EC6A2B',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: 3,
-                                                    cursor: 'pointer',
-                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1
-                                                }}
-                                            >
-                                                {downloadingLayer === layer.name ? '...' : 'GeoJSON'}
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'shapefile'); }}
-                                                disabled={downloadingLayer === layer.name}
-                                                style={{
-                                                    padding: '4px 10px',
-                                                    fontSize: 10,
-                                                    backgroundColor: '#D64A12',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: 3,
-                                                    cursor: 'pointer',
-                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1
-                                                }}
-                                            >
-                                                {downloadingLayer === layer.name ? '...' : 'SHP'}
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'csv'); }}
-                                                disabled={downloadingLayer === layer.name}
-                                                style={{
-                                                    padding: '4px 10px',
-                                                    fontSize: 10,
-                                                    backgroundColor: '#FF9800',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: 3,
-                                                    cursor: 'pointer',
-                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1
-                                                }}
-                                            >
-                                                {downloadingLayer === layer.name ? '...' : 'CSV'}
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'kml'); }}
-                                                disabled={downloadingLayer === layer.name}
-                                                style={{
-                                                    padding: '4px 10px',
-                                                    fontSize: 10,
-                                                    backgroundColor: '#E91E63',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: 3,
-                                                    cursor: 'pointer',
-                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1
-                                                }}
-                                            >
-                                                {downloadingLayer === layer.name ? '...' : 'KML'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-
-                                {filteredLayers.length === 0 && (
-                                    <div style={{ padding: '10px', color: '#666', textAlign: 'center' }}>
-                                        {layerSearch ? `Nenhuma camada encontrada correspondendo a "${layerSearch}"` : 'Nenhuma camada encontrada'}
+                                        <button
+                                            onClick={zoomToAllActiveLayers}
+                                            style={{
+                                                padding: '4px 12px',
+                                                fontSize: 11,
+                                                backgroundColor: '#2196F3',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: 4,
+                                                cursor: 'pointer',
+                                                fontWeight: 'bold'
+                                            }}
+                                            title="Zoom para a extensão de todas as camadas ativas"
+                                        >
+                                            🔍 Zoom a Todas
+                                        </button>
                                     </div>
                                 )}
                             </>
                         )}
+                    </div>
 
-                        {!loading && !error && activeTab === 'selected' && (
-                            <>
-                                {activeLayers.size === 0 ? (
-                                    <div style={{ padding: '30px 20px', color: '#999', textAlign: 'center' }}>
-                                        <div style={{ fontSize: 40, marginBottom: 10 }}>🗺️</div>
-                                        <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 5, color: '#3B3B3B' }}>
-                                            Nenhuma camada selecionada                                        </div>
-                                        <div style={{ fontSize: 12 }}>
-                                            Marque as camadas na aba "Todas as Camadas" para adicioná-las ao mapa
-                                        </div>
+                    {!layersPanelCollapsed && (
+                        <>
+                            <div style={{ padding: '10px', borderBottom: '1px solid #F0F0F0' }}>
+                                <div style={{ position: 'relative' }}>
+                                    <span style={{
+                                        position: 'absolute',
+                                        left: 10,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        fontSize: 14,
+                                        color: '#999',
+                                        pointerEvents: 'none'
+                                    }}>
+                                        🔍
+                                    </span>
+                                    <input
+                                        type="text"
+                                        value={layerSearch}
+                                        onChange={(e) => setLayerSearch(e.target.value)}
+                                        placeholder={activeTab === 'selected' ? "Pesquisar camadas selecionadas" : "Pesquisar todas as camadas"}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 10px 8px 32px',
+                                            borderRadius: 4,
+                                            border: '1px solid #E0E0E0',
+                                            fontSize: 12,
+                                            boxSizing: 'border-box',
+                                            color: '#3B3B3B'
+                                        }}
+                                    />
+                                    {layerSearch && (
+                                        <button
+                                            onClick={() => setLayerSearch('')}
+                                            style={{
+                                                position: 'absolute',
+                                                right: 8,
+                                                top: '50%',
+                                                transform: 'translateY(-50%)',
+                                                border: 'none',
+                                                background: 'none',
+                                                cursor: 'pointer',
+                                                fontSize: 14,
+                                                color: '#999',
+                                                padding: '0 4px'
+                                            }}
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+                                {layerSearch && (
+                                    <div style={{ fontSize: 10, color: '#888', marginTop: 4 }}>
+                                        Mostrando {activeTab === 'selected' ? filteredActiveLayers.length : filteredLayers.length} de {activeTab === 'selected' ? activeLayers.size : layers.length} camadas correspondendo a "{layerSearch}"
                                     </div>
-                                ) : (
+                                )}
+                            </div>
+
+                            <div style={{ overflowY: 'auto', flex: 1, padding: '10px' }}>
+                                {loading && <div style={{ padding: '10px', color: '#666' }}>Carregando camadas...</div>}
+
+                                {error && (
+                                    <div style={{ padding: '10px' }}>
+                                        <div style={{ color: '#EF5350', marginBottom: 10, fontSize: 13 }}>{error}</div>
+                                        <button
+                                            onClick={() => fetchLayers(baseUrl)}
+                                            style={{
+                                                padding: '8px 15px',
+                                                backgroundColor: '#EC6A2B',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: 4,
+                                                cursor: 'pointer',
+                                                width: '100%'
+                                            }}
+                                        >
+                                            Tentar Novamente
+                                        </button>
+                                    </div>
+                                )}
+
+                                {!loading && !error && activeTab === 'all' && (
                                     <>
-                                        {filteredActiveLayers.map((layer) => (
+                                        {filteredLayers.map((layer) => (
                                             <div
                                                 key={layer.name}
                                                 style={{
-                                                    padding: '12px',
+                                                    padding: '10px',
                                                     margin: '5px 0',
                                                     borderRadius: 6,
-                                                    backgroundColor: '#FFF5F0',
-                                                    border: '2px solid #EC6A2B',
+                                                    backgroundColor: activeLayers.has(layer.name) ? '#FFF5F0' : '#F8F8F8',
+                                                    border: activeLayers.has(layer.name) ? '2px solid #EC6A2B' : '1px solid transparent',
                                                     transition: 'all 0.2s'
                                                 }}
                                             >
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                                    <div style={{
-                                                        width: 6,
-                                                        height: 6,
-                                                        borderRadius: '50%',
-                                                        backgroundColor: '#EC6A2B',
-                                                        flexShrink: 0
-                                                    }} />
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={activeLayers.has(layer.name)}
+                                                        onChange={() => toggleLayer(layer.name)}
+                                                        style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
+                                                    />
                                                     <div style={{ flex: 1 }}>
-                                                        <div style={{ fontWeight: 600, fontSize: 13, color: '#3B3B3B' }}>
+                                                        <div style={{ fontWeight: 500, fontSize: 13, color: '#3B3B3B' }}>
                                                             {layerSearch ? (
                                                                 <span
                                                                     dangerouslySetInnerHTML={{
@@ -2854,34 +2886,15 @@ const BaseMap = () => {
                                                                 layer.title
                                                             )}
                                                         </div>
-                                                        <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
-                                                            {layer.name}
-                                                        </div>
                                                         {layer.abstract && (
                                                             <div style={{ fontSize: 11, color: '#888', marginTop: 3 }}>
                                                                 {layer.abstract.length > 80 ? layer.abstract.substring(0, 80) + '...' : layer.abstract}
                                                             </div>
                                                         )}
                                                     </div>
-                                                    <button
-                                                        onClick={() => toggleLayer(layer.name)}
-                                                        style={{
-                                                            padding: '4px 12px',
-                                                            fontSize: 10,
-                                                            backgroundColor: '#EF5350',
-                                                            color: 'white',
-                                                            border: 'none',
-                                                            borderRadius: 3,
-                                                            cursor: 'pointer',
-                                                            fontWeight: 'bold'
-                                                        }}
-                                                        title="Remover camada"
-                                                    >
-                                                        ✕ Remover
-                                                    </button>
                                                 </div>
 
-                                                <div style={{ display: 'flex', gap: 4, marginLeft: 14, flexWrap: 'wrap' }}>
+                                                <div style={{ display: 'flex', gap: 4, marginLeft: 28, flexWrap: 'wrap' }}>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); openAttributeTable(layer.name); }}
                                                         style={{
@@ -2896,22 +2909,6 @@ const BaseMap = () => {
                                                         }}
                                                     >
                                                         📊 Abrir Tabela
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); zoomToLayer(layer.name); }}
-                                                        style={{
-                                                            padding: '4px 10px',
-                                                            fontSize: 10,
-                                                            backgroundColor: '#2196F3',
-                                                            color: 'white',
-                                                            border: 'none',
-                                                            borderRadius: 3,
-                                                            cursor: 'pointer',
-                                                            fontWeight: 'bold'
-                                                        }}
-                                                        title="Zoom para a extensão da camada"
-                                                    >
-                                                        🔍 Zoom
                                                     </button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'geojson'); }}
@@ -2981,16 +2978,201 @@ const BaseMap = () => {
                                             </div>
                                         ))}
 
-                                        {filteredActiveLayers.length === 0 && layerSearch && (
+                                        {filteredLayers.length === 0 && (
                                             <div style={{ padding: '10px', color: '#666', textAlign: 'center' }}>
-                                                Nenhuma camada selecionada correspondendo a "{layerSearch}"
+                                                {layerSearch ? `Nenhuma camada encontrada correspondendo a "${layerSearch}"` : 'Nenhuma camada encontrada'}
                                             </div>
                                         )}
                                     </>
                                 )}
-                            </>
-                        )}
-                    </div>
+
+                                {!loading && !error && activeTab === 'selected' && (
+                                    <>
+                                        {activeLayers.size === 0 ? (
+                                            <div style={{ padding: '30px 20px', color: '#999', textAlign: 'center' }}>
+                                                <div style={{ fontSize: 40, marginBottom: 10 }}>🗺️</div>
+                                                <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 5, color: '#3B3B3B' }}>
+                                                    Nenhuma camada selecionada                                        </div>
+                                                <div style={{ fontSize: 12 }}>
+                                                    Marque as camadas na aba "Todas as Camadas" para adicioná-las ao mapa
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {filteredActiveLayers.map((layer) => (
+                                                    <div
+                                                        key={layer.name}
+                                                        style={{
+                                                            padding: '12px',
+                                                            margin: '5px 0',
+                                                            borderRadius: 6,
+                                                            backgroundColor: '#FFF5F0',
+                                                            border: '2px solid #EC6A2B',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                                            <div style={{
+                                                                width: 6,
+                                                                height: 6,
+                                                                borderRadius: '50%',
+                                                                backgroundColor: '#EC6A2B',
+                                                                flexShrink: 0
+                                                            }} />
+                                                            <div style={{ flex: 1 }}>
+                                                                <div style={{ fontWeight: 600, fontSize: 13, color: '#3B3B3B' }}>
+                                                                    {layerSearch ? (
+                                                                        <span
+                                                                            dangerouslySetInnerHTML={{
+                                                                                __html: layer.title.replace(
+                                                                                    new RegExp(`(${layerSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
+                                                                                    '<mark style="background-color: #FFF5F0; padding: 0 2px;">$1</mark>'
+                                                                                )
+                                                                            }}
+                                                                        />
+                                                                    ) : (
+                                                                        layer.title
+                                                                    )}
+                                                                </div>
+                                                                <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
+                                                                    {layer.name}
+                                                                </div>
+                                                                {layer.abstract && (
+                                                                    <div style={{ fontSize: 11, color: '#888', marginTop: 3 }}>
+                                                                        {layer.abstract.length > 80 ? layer.abstract.substring(0, 80) + '...' : layer.abstract}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <button
+                                                                onClick={() => toggleLayer(layer.name)}
+                                                                style={{
+                                                                    padding: '4px 12px',
+                                                                    fontSize: 10,
+                                                                    backgroundColor: '#EF5350',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    borderRadius: 3,
+                                                                    cursor: 'pointer',
+                                                                    fontWeight: 'bold'
+                                                                }}
+                                                                title="Remover camada"
+                                                            >
+                                                                ✕ Remover
+                                                            </button>
+                                                        </div>
+
+                                                        <div style={{ display: 'flex', gap: 4, marginLeft: 14, flexWrap: 'wrap' }}>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); openAttributeTable(layer.name); }}
+                                                                style={{
+                                                                    padding: '4px 10px',
+                                                                    fontSize: 10,
+                                                                    backgroundColor: '#9C27B0',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    borderRadius: 3,
+                                                                    cursor: 'pointer',
+                                                                    fontWeight: 'bold'
+                                                                }}
+                                                            >
+                                                                📊 Abrir Tabela
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); zoomToLayer(layer.name); }}
+                                                                style={{
+                                                                    padding: '4px 10px',
+                                                                    fontSize: 10,
+                                                                    backgroundColor: '#2196F3',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    borderRadius: 3,
+                                                                    cursor: 'pointer',
+                                                                    fontWeight: 'bold'
+                                                                }}
+                                                                title="Zoom para a extensão da camada"
+                                                            >
+                                                                🔍 Zoom
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'geojson'); }}
+                                                                disabled={downloadingLayer === layer.name}
+                                                                style={{
+                                                                    padding: '4px 10px',
+                                                                    fontSize: 10,
+                                                                    backgroundColor: '#EC6A2B',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    borderRadius: 3,
+                                                                    cursor: 'pointer',
+                                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1
+                                                                }}
+                                                            >
+                                                                {downloadingLayer === layer.name ? '...' : 'GeoJSON'}
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'shapefile'); }}
+                                                                disabled={downloadingLayer === layer.name}
+                                                                style={{
+                                                                    padding: '4px 10px',
+                                                                    fontSize: 10,
+                                                                    backgroundColor: '#D64A12',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    borderRadius: 3,
+                                                                    cursor: 'pointer',
+                                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1
+                                                                }}
+                                                            >
+                                                                {downloadingLayer === layer.name ? '...' : 'SHP'}
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'csv'); }}
+                                                                disabled={downloadingLayer === layer.name}
+                                                                style={{
+                                                                    padding: '4px 10px',
+                                                                    fontSize: 10,
+                                                                    backgroundColor: '#FF9800',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    borderRadius: 3,
+                                                                    cursor: 'pointer',
+                                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1
+                                                                }}
+                                                            >
+                                                                {downloadingLayer === layer.name ? '...' : 'CSV'}
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'kml'); }}
+                                                                disabled={downloadingLayer === layer.name}
+                                                                style={{
+                                                                    padding: '4px 10px',
+                                                                    fontSize: 10,
+                                                                    backgroundColor: '#E91E63',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    borderRadius: 3,
+                                                                    cursor: 'pointer',
+                                                                    opacity: downloadingLayer === layer.name ? 0.7 : 1
+                                                                }}
+                                                            >
+                                                                {downloadingLayer === layer.name ? '...' : 'KML'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+
+                                                {filteredActiveLayers.length === 0 && layerSearch && (
+                                                    <div style={{ padding: '10px', color: '#666', textAlign: 'center' }}>
+                                                        Nenhuma camada selecionada correspondendo a "{layerSearch}"
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </>
+                    )}
 
                     {downloadOverlay}
                 </div>
