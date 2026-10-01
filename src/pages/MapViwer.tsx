@@ -1,4 +1,5 @@
 // BaseMap.tsx
+
 import mapboxgl from "mapbox-gl"
 import 'mapbox-gl/dist/mapbox-gl.css';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
@@ -10,6 +11,351 @@ import booleanIntersects from '@turf/boolean-intersects';
 import lineIntersect from '@turf/line-intersect';
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
 import midpoint from '@turf/midpoint';
+import JSZip from 'jszip';
+
+// ============================================================================
+// SHAPEFILE WRITER
+// Writes .shp / .shx / .dbf / .prj / .cpg in pure JS. One record per feature,
+// complete attribute table. Runs entirely in the browser.
+// ============================================================================
+
+const SHAPE_TYPE_POINT = 1;
+const SHAPE_TYPE_POLYLINE = 3;
+const SHAPE_TYPE_POLYGON = 5;
+
+interface ShapefileRecord {
+    shapeType: number;
+    bbox: [number, number, number, number];
+    parts: number[][][];
+    points: number[][];
+    point?: [number, number];
+}
+
+function explodeForShapefile(features: any[]): any[] {
+    const out: any[] = [];
+    for (const f of features) {
+        if (!f || !f.geometry) continue;
+        const t = f.geometry.type;
+        if (t === 'MultiPolygon') {
+            for (const c of f.geometry.coordinates) {
+                out.push({ type: 'Feature', properties: { ...(f.properties || {}) }, geometry: { type: 'Polygon', coordinates: c } });
+            }
+        } else if (t === 'MultiLineString') {
+            for (const c of f.geometry.coordinates) {
+                out.push({ type: 'Feature', properties: { ...(f.properties || {}) }, geometry: { type: 'LineString', coordinates: c } });
+            }
+        } else if (t === 'MultiPoint') {
+            for (const c of f.geometry.coordinates) {
+                out.push({ type: 'Feature', properties: { ...(f.properties || {}) }, geometry: { type: 'Point', coordinates: c } });
+            }
+        } else {
+            out.push(f);
+        }
+    }
+    return out;
+}
+
+function featureToShapefileRecord(f: any): ShapefileRecord | null {
+    const g = f.geometry;
+    if (!g) return null;
+    if (g.type === 'Point') {
+        const [x, y] = g.coordinates;
+        return { shapeType: SHAPE_TYPE_POINT, bbox: [x, y, x, y], parts: [], points: [], point: [x, y] };
+    }
+    if (g.type === 'LineString') {
+        const pts = g.coordinates as number[][];
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const [x, y] of pts) {
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+        }
+        return { shapeType: SHAPE_TYPE_POLYLINE, bbox: [minX, minY, maxX, maxY], parts: [pts.slice()], points: pts.slice() };
+    }
+    if (g.type === 'Polygon') {
+        const rings = (g.coordinates as number[][][]).map(r => r.slice().reverse());
+        const flat: number[][] = [];
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const ring of rings) {
+            for (const [x, y] of ring) {
+                flat.push([x, y]);
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+            }
+        }
+        return { shapeType: SHAPE_TYPE_POLYGON, bbox: [minX, minY, maxX, maxY], parts: rings, points: flat };
+    }
+    return null;
+}
+
+function recordContentLength(r: ShapefileRecord): number {
+    if (r.shapeType === SHAPE_TYPE_POINT) return 4 + 16;
+    return 4 + 32 + 8 + 4 * r.parts.length + 16 * r.points.length;
+}
+
+function buildShp(records: ShapefileRecord[]): Uint8Array {
+    let total = 100;
+    for (const r of records) total += 8 + recordContentLength(r);
+
+    const buf = new ArrayBuffer(total);
+    const view = new DataView(buf);
+    const bytes = new Uint8Array(buf);
+
+    view.setInt32(0, 9994, false);
+    view.setInt32(24, total / 2, false);
+    view.setInt32(28, 1000, true);
+    view.setInt32(32, records[0]?.shapeType ?? 0, true);
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const r of records) {
+        if (r.bbox[0] < minX) minX = r.bbox[0];
+        if (r.bbox[1] < minY) minY = r.bbox[1];
+        if (r.bbox[2] > maxX) maxX = r.bbox[2];
+        if (r.bbox[3] > maxY) maxY = r.bbox[3];
+    }
+    if (!isFinite(minX)) { minX = 0; minY = 0; maxX = 0; maxY = 0; }
+    view.setFloat64(36, minX, true);
+    view.setFloat64(44, minY, true);
+    view.setFloat64(52, maxX, true);
+    view.setFloat64(60, maxY, true);
+
+    let off = 100;
+    for (let i = 0; i < records.length; i++) {
+        const r = records[i];
+        const contentLen = recordContentLength(r);
+
+        view.setInt32(off, i + 1, false); off += 4;
+        view.setInt32(off, contentLen / 2, false); off += 4;
+        view.setInt32(off, r.shapeType, true); off += 4;
+
+        if (r.shapeType === SHAPE_TYPE_POINT) {
+            view.setFloat64(off, r.point![0], true); off += 8;
+            view.setFloat64(off, r.point![1], true); off += 8;
+        } else {
+            view.setFloat64(off, r.bbox[0], true); off += 8;
+            view.setFloat64(off, r.bbox[1], true); off += 8;
+            view.setFloat64(off, r.bbox[2], true); off += 8;
+            view.setFloat64(off, r.bbox[3], true); off += 8;
+            view.setInt32(off, r.parts.length, true); off += 4;
+            view.setInt32(off, r.points.length, true); off += 4;
+
+            let idx = 0;
+            for (const p of r.parts) {
+                view.setInt32(off, idx, true); off += 4;
+                idx += p.length;
+            }
+            for (const [x, y] of r.points) {
+                view.setFloat64(off, x, true); off += 8;
+                view.setFloat64(off, y, true); off += 8;
+            }
+        }
+    }
+
+    return bytes;
+}
+
+function buildShx(records: ShapefileRecord[]): Uint8Array {
+    const total = 100 + 8 * records.length;
+    const buf = new ArrayBuffer(total);
+    const view = new DataView(buf);
+
+    view.setInt32(0, 9994, false);
+    view.setInt32(24, total / 2, false);
+    view.setInt32(28, 1000, true);
+    view.setInt32(32, records[0]?.shapeType ?? 0, true);
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const r of records) {
+        if (r.bbox[0] < minX) minX = r.bbox[0];
+        if (r.bbox[1] < minY) minY = r.bbox[1];
+        if (r.bbox[2] > maxX) maxX = r.bbox[2];
+        if (r.bbox[3] > maxY) maxY = r.bbox[3];
+    }
+    if (!isFinite(minX)) { minX = 0; minY = 0; maxX = 0; maxY = 0; }
+    view.setFloat64(36, minX, true);
+    view.setFloat64(44, minY, true);
+    view.setFloat64(52, maxX, true);
+    view.setFloat64(60, maxY, true);
+
+    let shpOff = 100;
+    let off = 100;
+    for (const r of records) {
+        const contentLen = recordContentLength(r);
+        view.setInt32(off, shpOff / 2, false); off += 4;
+        view.setInt32(off, contentLen / 2, false); off += 4;
+        shpOff += 8 + contentLen;
+    }
+
+    return new Uint8Array(buf);
+}
+
+function buildDbf(features: any[]): Uint8Array {
+    const keys: string[] = [];
+    const seen = new Set<string>();
+    for (const f of features) {
+        if (f.properties) {
+            for (const k of Object.keys(f.properties)) {
+                if (!seen.has(k)) { seen.add(k); keys.push(k); }
+            }
+        }
+    }
+
+    const used = new Map<string, number>();
+    const fieldNames: string[] = [];
+    for (const k of keys) {
+        let n = k.toUpperCase().replace(/[^A-Z0-9_]/g, '_').substring(0, 10) || 'F';
+        const prior = used.get(n) || 0;
+        used.set(n, prior + 1);
+        if (prior > 0) {
+            const suffix = String(prior);
+            n = n.substring(0, Math.max(1, 10 - suffix.length)) + suffix;
+        }
+        fieldNames.push(n);
+    }
+
+    const fields = keys.map((k, i) => {
+        let numeric = true, maxLen = 1, maxDec = 0;
+        for (const f of features) {
+            const v = f.properties ? f.properties[k] : undefined;
+            if (v === null || v === undefined) continue;
+            if (typeof v === 'number') {
+                const s = String(v);
+                if (s.length > maxLen) maxLen = s.length;
+                const dot = s.indexOf('.');
+                if (dot >= 0) {
+                    const dec = s.length - dot - 1;
+                    if (dec > maxDec) maxDec = dec;
+                }
+            } else if (typeof v === 'boolean') {
+                numeric = false;
+                if (5 > maxLen) maxLen = 5;
+            } else {
+                numeric = false;
+                const s = String(v);
+                if (s.length > maxLen) maxLen = s.length;
+            }
+        }
+        if (numeric) {
+            if (maxLen > 18) maxLen = 18;
+        } else {
+            if (maxLen > 254) maxLen = 254;
+        }
+        return {
+            name: fieldNames[i],
+            type: numeric ? 'N' : 'C',
+            length: Math.max(1, maxLen),
+            decimals: numeric ? Math.min(maxDec, 15) : 0,
+        };
+    });
+
+    if (fields.length === 0) {
+        fields.push({ name: 'ID', type: 'N', length: 10, decimals: 0 });
+    }
+
+    const headerSize = 32 + fields.length * 32 + 1;
+    const recordSize = 1 + fields.reduce((s, f) => s + f.length, 0);
+    const totalSize = headerSize + recordSize * features.length + 1;
+
+    const buf = new ArrayBuffer(totalSize);
+    const view = new DataView(buf);
+    const bytes = new Uint8Array(buf);
+
+    const now = new Date();
+    view.setUint8(0, 0x03);
+    view.setUint8(1, now.getFullYear() - 1900);
+    view.setUint8(2, now.getMonth() + 1);
+    view.setUint8(3, now.getDate());
+    view.setInt32(4, features.length, true);
+    view.setInt16(8, headerSize, true);
+    view.setInt16(10, recordSize, true);
+
+    let off = 32;
+    for (const f of fields) {
+        for (let i = 0; i < 11; i++) {
+            bytes[off + i] = i < f.name.length ? f.name.charCodeAt(i) : 0;
+        }
+        bytes[off + 11] = f.type.charCodeAt(0);
+        bytes[off + 16] = f.length & 0xff;
+        bytes[off + 17] = f.decimals & 0xff;
+        off += 32;
+    }
+    bytes[off] = 0x0d; off += 1;
+
+    for (const feat of features) {
+        bytes[off] = 0x20; off += 1;
+        for (let i = 0; i < fields.length; i++) {
+            const fl = fields[i];
+            const v = feat.properties ? feat.properties[keys[i]] : undefined;
+            let str: string;
+            if (v === null || v === undefined) {
+                str = '';
+            } else if (fl.type === 'N') {
+                const num = Number(v);
+                if (!isFinite(num)) str = '';
+                else if (fl.decimals > 0) str = num.toFixed(fl.decimals);
+                else str = String(Math.round(num));
+            } else {
+                str = String(v);
+            }
+            if (str.length > fl.length) str = str.substring(0, fl.length);
+            str = fl.type === 'N' ? str.padStart(fl.length, ' ') : str.padEnd(fl.length, ' ');
+            for (let j = 0; j < fl.length; j++) {
+                bytes[off + j] = str.charCodeAt(j) & 0xff;
+            }
+            off += fl.length;
+        }
+    }
+
+    bytes[off] = 0x1a;
+
+    return bytes;
+}
+
+const PRJ_4674 = `GEOGCS["SIRGAS 2000",DATUM["Sistema_de_Referencia_Geocentrico_para_las_Americas_2000",SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],AUTHORITY["EPSG","6674"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4674"]]`;
+
+async function buildShapefileZip(features: any[], layerName: string): Promise<Blob> {
+    const exploded = explodeForShapefile(features);
+
+    const families: Record<string, any[]> = {};
+    for (const f of exploded) {
+        const t = f.geometry.type;
+        const fam = t === 'Point' ? 'point' : t === 'LineString' ? 'line' : t === 'Polygon' ? 'polygon' : null;
+        if (!fam) continue;
+        (families[fam] ||= []).push(f);
+    }
+
+    const zip = new JSZip();
+    const base = (layerName || 'layer').replace(/[^a-zA-Z0-9_\-]/g, '_').substring(0, 50) || 'layer';
+    const familyNames = Object.keys(families);
+    const multi = familyNames.length > 1;
+
+    for (const fam of familyNames) {
+        const feats = families[fam];
+        const records: ShapefileRecord[] = [];
+        for (const f of feats) {
+            const r = featureToShapefileRecord(f);
+            if (r) records.push(r);
+        }
+        if (records.length === 0) continue;
+
+        const fileBase = multi ? `${base}_${fam}` : base;
+
+        zip.file(`${fileBase}.shp`, buildShp(records));
+        zip.file(`${fileBase}.shx`, buildShx(records));
+        zip.file(`${fileBase}.dbf`, buildDbf(feats));
+        zip.file(`${fileBase}.prj`, PRJ_4674);
+        zip.file(`${fileBase}.cpg`, 'ISO-8859-1');
+
+        console.log(`[SHP] ${fileBase}: ${records.length} records written`);
+    }
+
+    return await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+}
+
+// ============================================================================
 
 interface WMSLayer {
     name: string;
@@ -25,7 +371,6 @@ type BBox = [number, number, number, number];
 
 const CORS_PROXY = 'https://corsproxy.io/?';
 
-// --- ORGANIZED SERVER LIST ---
 const SERVER_OPTIONS = [
     { label: 'ANP - Agência Nacional do Petróleo, Gás Natural e Biocombustíveis', url: 'https://gishub.anp.gov.br/geoserver/ows' },
     { label: 'ANTT - Agência Nacional de Transportes Terrestres', url: 'https://geoservicos.inde.gov.br/geoserver/ANTT/ows' },
@@ -65,7 +410,6 @@ const SERVER_OPTIONS = [
     { label: 'Personalizado', url: '' },
 ];
 
-// --- LEGEND BOX COMPONENT ---
 interface LegendBoxProps {
     activeLayers: Set<string>;
     baseUrl: string;
@@ -200,7 +544,6 @@ const LegendBox = ({ activeLayers, baseUrl, needsProxy, layers }: LegendBoxProps
     );
 };
 
-// --- MAIN BASEMAP COMPONENT ---
 const BaseMap = () => {
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -628,7 +971,6 @@ const BaseMap = () => {
         }
     };
 
-    // --- BBOX / ZOOM HELPERS -------------------------------------------------
     const bboxFromFeatures = (features: any[]): BBox | null => {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         let found = false;
@@ -826,7 +1168,6 @@ const BaseMap = () => {
         const bbox = bboxFromFeatures(features);
         if (bbox) fitMapToBBox(bbox);
     };
-    // ------------------------------------------------------------------------
 
     const toggleLayer = (layerName: string) => {
         if (!mapRef.current || !isReady) return;
@@ -903,17 +1244,6 @@ const BaseMap = () => {
         setTimeout(() => bringDrawLayersToFront(), 50);
     };
 
-    // --- CLIP HELPERS --------------------------------------------------------
-    // Dispatch on geometry type:
-    //   - Polygon / MultiPolygon -> Turf intersect (areal clip)
-    //   - LineString / MultiLineString -> lineIntersect to find crossings,
-    //     splice them into the coordinate array, then midpoint test per
-    //     sub-segment. This produces true clipped lines with endpoints
-    //     exactly on the polygon boundary.
-    //   - Point / MultiPoint -> booleanPointInPolygon
-    // Every surviving piece carries the parent feature's original properties.
-    // ------------------------------------------------------------------------
-
     const asFeature = (geometry: any, properties: any, id?: any): any => ({
         type: 'Feature',
         ...(id !== undefined ? { id } : {}),
@@ -941,24 +1271,18 @@ const BaseMap = () => {
         return [asFeature(clipped.geometry, feat.properties, feat.id)];
     };
 
-    // Return true if two coordinates are practically the same point.
     const samePoint = (a: number[], b: number[], eps = 1e-9) =>
         Math.abs(a[0] - b[0]) < eps && Math.abs(a[1] - b[1]) < eps;
 
-    // Splice crossing points into a LineString's coordinate array at the
-    // correct position along the line.
     const spliceCrossingsIntoLine = (
         coords: number[][],
         crossings: number[][]
     ): number[][] => {
         if (crossings.length === 0) return coords.slice();
 
-        // Collect all coordinates to insert, along with their distance along
-        // the line so we can sort them correctly.
         type Pt = { coord: number[]; dist: number };
         const points: Pt[] = [];
 
-        // Precompute cumulative length per segment.
         const segStartDist: number[] = [0];
         for (let i = 1; i < coords.length; i++) {
             const dx = coords[i][0] - coords[i - 1][0];
@@ -968,7 +1292,6 @@ const BaseMap = () => {
         const totalLen = segStartDist[segStartDist.length - 1];
 
         for (const c of crossings) {
-            // Find which segment this crossing lies on by scanning.
             let bestSeg = -1;
             let bestDistAlongSeg = Infinity;
             let bestDistanceSq = Infinity;
@@ -976,7 +1299,6 @@ const BaseMap = () => {
             for (let i = 0; i < coords.length - 1; i++) {
                 const a = coords[i];
                 const b = coords[i + 1];
-                // Distance from c to segment [a, b] in coordinate units.
                 const vx = b[0] - a[0];
                 const vy = b[1] - a[1];
                 const wx = c[0] - a[0];
@@ -1000,7 +1322,6 @@ const BaseMap = () => {
 
             if (bestSeg === -1) continue;
 
-            // Distance along the whole line = start of segment + t * seg length.
             const segLen = Math.sqrt(
                 Math.pow(coords[bestSeg + 1][0] - coords[bestSeg][0], 2) +
                 Math.pow(coords[bestSeg + 1][1] - coords[bestSeg][1], 2)
@@ -1009,8 +1330,6 @@ const BaseMap = () => {
             points.push({ coord: [c[0], c[1]], dist: Math.min(dist, totalLen) });
         }
 
-        // Merge: existing vertices (with their cumulative distances) plus
-        // crossing points, sorted by distance, deduplicated.
         const merged: Pt[] = [];
         for (let i = 0; i < coords.length; i++) {
             merged.push({ coord: coords[i], dist: segStartDist[i] });
@@ -1031,16 +1350,12 @@ const BaseMap = () => {
         return out;
     };
 
-    // Split the enriched coordinate array into sub-segments at every
-    // crossing point. Returns an array of coordinate arrays, each of which
-    // is a candidate LineString.
     const splitLineAtCrossings = (
         enriched: number[][],
         crossings: number[][]
     ): number[][][] => {
         if (crossings.length === 0) return [enriched];
 
-        // Find the indices in the enriched array that correspond to crossings.
         const crossingIndices: number[] = [];
         for (let i = 0; i < enriched.length; i++) {
             for (const c of crossings) {
@@ -1053,19 +1368,16 @@ const BaseMap = () => {
 
         if (crossingIndices.length === 0) return [enriched];
 
-        // Sort and dedupe indices.
         const uniqueIndices = Array.from(new Set(crossingIndices)).sort((a, b) => a - b);
 
         const pieces: number[][][] = [];
         let start = 0;
         for (const idx of uniqueIndices) {
             if (idx > start) {
-                // piece from start to idx (inclusive) — endpoints touch crossings.
                 pieces.push(enriched.slice(start, idx + 1));
             }
             start = idx;
         }
-        // Final piece from the last crossing to the end.
         if (start < enriched.length - 1) {
             pieces.push(enriched.slice(start));
         }
@@ -1073,8 +1385,6 @@ const BaseMap = () => {
         return pieces.filter(p => p.length >= 2);
     };
 
-    // Clip a single LineString (coordinate array). Returns an array of
-    // surviving coordinate arrays.
     const clipSingleLine = (
         coords: number[][],
         polygonFeature: any
@@ -1083,32 +1393,26 @@ const BaseMap = () => {
 
         const lineFeature = asFeature({ type: 'LineString', coordinates: coords }, {});
 
-        // Fast reject: no overlap at all.
         let overlaps = false;
         try {
             overlaps = booleanIntersects(lineFeature as any, polygonFeature as any);
         } catch (e) {
-            overlaps = true; // be conservative on error
+            overlaps = true;
         }
         if (!overlaps) return [];
 
-        // Find every crossing point between the line and the polygon boundary.
         let crossings: number[][] = [];
         try {
             const res = lineIntersect(lineFeature as any, polygonFeature as any);
             crossings = (res?.features || []).map((f: any) => f.geometry.coordinates as number[]);
         } catch (e) {
             console.warn('lineIntersect falhou para um segmento line:', e);
-            // Fall back to treating the whole line as one piece; midpoint test
-            // will still decide inside/outside.
             crossings = [];
         }
 
-        // Splice crossings into the line's coordinate array, then split.
         const enriched = spliceCrossingsIntoLine(coords, crossings);
         const pieces = splitLineAtCrossings(enriched, crossings);
 
-        // Keep the pieces whose midpoint is inside the polygon.
         const survivors: number[][][] = [];
         for (const piece of pieces) {
             if (piece.length < 2) continue;
@@ -1122,9 +1426,6 @@ const BaseMap = () => {
                     asFeature({ type: 'Point', coordinates: last }, {}) as any
                 );
                 inside = booleanPointInPolygon(mid as any, polygonFeature as any);
-                // A piece whose endpoints are both exactly on the boundary and
-                // whose midpoint is not classified may need a second check:
-                // test all its vertices.
                 if (!inside) {
                     inside = piece.some(c =>
                         booleanPointInPolygon(
@@ -1164,19 +1465,17 @@ const BaseMap = () => {
 
         if (allSurvivors.length === 0) return [];
 
-        if (allSurvivors.length === 1) {
-            return [asFeature(
-                { type: 'LineString', coordinates: allSurvivors[0] },
+        // Each surviving segment becomes its own feature. This guarantees
+        // one line per record in the shapefile output.
+        const out: GeoJSON.Feature[] = [];
+        for (const segment of allSurvivors) {
+            out.push(asFeature(
+                { type: 'LineString', coordinates: segment },
                 feat.properties,
                 feat.id
-            )];
+            ));
         }
-
-        return [asFeature(
-            { type: 'MultiLineString', coordinates: allSurvivors },
-            feat.properties,
-            feat.id
-        )];
+        return out;
     };
 
     const clipPointFeature = (
@@ -1208,7 +1507,6 @@ const BaseMap = () => {
                     );
                     if (inside) kept.push(c);
                 } catch (e) {
-                    // Skip this coordinate if the test throws.
                 }
             }
             if (kept.length === 0) return [];
@@ -1245,7 +1543,6 @@ const BaseMap = () => {
 
         return out;
     };
-    // -------------------------------------------------------------------------
 
     const openAttributeTable = async (layerName: string) => {
         setSelectedLayerForTable(layerName);
@@ -1257,7 +1554,7 @@ const BaseMap = () => {
         setCurrentPage(0);
 
         try {
-            const url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674`;
+            const url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674&count=1000000`;
 
             const response = needsProxy ? await proxyFetch(url) : await fetch(url);
 
@@ -1305,7 +1602,7 @@ const BaseMap = () => {
         setCurrentPage(0);
 
         try {
-            const url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674`;
+            const url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674&count=1000000`;
 
             const response = needsProxy ? await proxyFetch(url) : await fetch(url);
 
@@ -1363,6 +1660,19 @@ const BaseMap = () => {
         return csvRows.join('\n');
     };
 
+    // --- SHAPEFILE (client-side) --------------------------------------------
+    // Uses our own binary writer (buildShapefileZip at the top of this file).
+    // @mapbox/shp-write was removed because it merges every LineString and
+    // Polygon in a layer into ONE multipart record — that's why QGIS showed
+    // "Features Total: 1" for a layer with 1633 lines. Our writer emits one
+    // record per feature and preserves the full attribute table.
+    // ------------------------------------------------------------------------
+    const createShapefileZipBlob = async (features: any[], layerName: string): Promise<Blob> => {
+        console.log(`[SHP] input ${features.length} features`);
+        return await buildShapefileZip(features, layerName);
+    };
+    // ------------------------------------------------------------------------
+
     const downloadLayerByDraw = async (layerName: string, format: 'geojson' | 'shapefile' | 'csv' | 'kml') => {
         if (!spatialFilter || spatialFilter.type !== 'Polygon') {
             alert('Por favor, desenhe uma área no mapa primeiro!');
@@ -1374,7 +1684,7 @@ const BaseMap = () => {
         try {
             console.log('Baixando todos os dados da camada...');
 
-            const fullDataUrl = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674`;
+            const fullDataUrl = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674&count=1000000`;
 
             console.log('URL:', fullDataUrl);
 
@@ -1392,8 +1702,6 @@ const BaseMap = () => {
             }
 
             console.log(`Total de feições baixadas: ${data.features.length}`);
-
-            console.log('Recortando feições pela área desenhada (dispatch por geometria)...');
 
             const clippedFeatures = clipFeaturesToPolygon(
                 data.features,
@@ -1418,13 +1726,8 @@ const BaseMap = () => {
                 blob = new Blob([JSON.stringify(clippedData)], { type: 'application/json' });
                 fileExtension = 'geojson';
             } else if (format === 'shapefile') {
-                const clippedData = {
-                    type: 'FeatureCollection',
-                    features: clippedFeatures
-                };
-                blob = new Blob([JSON.stringify(clippedData)], { type: 'application/json' });
-                fileExtension = 'geojson';
-                alert('Shapefile não pode ser gerado com filtro local. Baixado como GeoJSON.');
+                blob = await createShapefileZipBlob(clippedFeatures, layerName);
+                fileExtension = 'zip';
             } else if (format === 'csv') {
                 const csvContent = convertToCSV(clippedFeatures);
                 blob = new Blob([csvContent], { type: 'text/csv' });
@@ -1464,35 +1767,52 @@ const BaseMap = () => {
         setDownloadingLayer(layerName);
 
         try {
-            let url = '';
-            let fileExtension = '';
+            let blob: Blob;
+            let fileExtension: string;
 
-            switch (format) {
-                case 'geojson':
-                    url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674`;
-                    fileExtension = 'geojson';
-                    break;
-                case 'shapefile':
-                    url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=SHAPE-ZIP&srsName=EPSG:4674`;
-                    fileExtension = 'zip';
-                    break;
-                case 'csv':
-                    url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=csv&srsName=EPSG:4674`;
-                    fileExtension = 'csv';
-                    break;
-                case 'kml':
-                    url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/vnd.google-earth.kml+xml&srsName=EPSG:4674`;
-                    fileExtension = 'kml';
-                    break;
+            if (format === 'shapefile') {
+                const url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674&count=1000000`;
+                const response = needsProxy ? await proxyFetch(url) : await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Falha no download com status ${response.status}`);
+                }
+                const data = await response.json();
+                console.log(`[SHP] WFS returned ${data?.features?.length ?? 0} features for ${layerName}`);
+                if (!data.features || data.features.length === 0) {
+                    alert('Nenhuma feição encontrada nesta camada');
+                    return;
+                }
+                blob = await createShapefileZipBlob(data.features, layerName);
+                fileExtension = 'zip';
+            } else {
+                let url = '';
+
+                switch (format) {
+                    case 'geojson':
+                        url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/json&srsName=EPSG:4674&count=1000000`;
+                        fileExtension = 'geojson';
+                        break;
+                    case 'csv':
+                        url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=csv&srsName=EPSG:4674&count=1000000`;
+                        fileExtension = 'csv';
+                        break;
+                    case 'kml':
+                        url = `${baseUrl}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layerName}&outputFormat=application/vnd.google-earth.kml+xml&srsName=EPSG:4674&count=1000000`;
+                        fileExtension = 'kml';
+                        break;
+                    default:
+                        throw new Error('Formato não suportado');
+                }
+
+                const response = needsProxy ? await proxyFetch(url) : await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error(`Falha no download com status ${response.status}`);
+                }
+
+                blob = await response.blob();
             }
 
-            const response = needsProxy ? await proxyFetch(url) : await fetch(url);
-
-            if (!response.ok) {
-                throw new Error(`Falha no download com status ${response.status}`);
-            }
-
-            const blob = await response.blob();
             const downloadUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = downloadUrl;
@@ -1531,6 +1851,42 @@ const BaseMap = () => {
         currentPage * rowsPerPage,
         (currentPage + 1) * rowsPerPage
     );
+
+    const downloadOverlay = downloadingLayer ? (
+        <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(255, 255, 255, 0.92)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            borderRadius: 8,
+            gap: 10,
+            pointerEvents: 'auto',
+            cursor: 'wait'
+        }}>
+            <div style={{
+                width: 28,
+                height: 28,
+                border: '3px solid #F0F0F0',
+                borderTop: '3px solid #EC6A2B',
+                borderRadius: '50%'
+            }} />
+            <div style={{
+                fontSize: 13,
+                fontWeight: 'bold',
+                color: '#EC6A2B',
+                letterSpacing: '-0.2px'
+            }}>
+                Download em progresso...
+            </div>
+        </div>
+    ) : null;
 
     return (
         <div style={{
@@ -1872,7 +2228,6 @@ const BaseMap = () => {
                             </button>
                         </div>
 
-                        {/* Drawing Tool Section */}
                         <div style={{
                             padding: '10px 15px',
                             backgroundColor: spatialFilter ? '#FFF5F0' : '#fff',
@@ -1977,7 +2332,6 @@ const BaseMap = () => {
                             )}
                         </div>
 
-                        {/* Active layers with draw download option */}
                         {activeLayers.size > 0 && spatialFilter && (
                             <div style={{ padding: '10px', backgroundColor: '#FFF5F0' }}>
                                 <div style={{
@@ -2529,10 +2883,11 @@ const BaseMap = () => {
                             </>
                         )}
                     </div>
+
+                    {downloadOverlay}
                 </div>
             )}
 
-            {/* ATTRIBUTE TABLE */}
             {showTable && selectedLayerForTable && (
                 <div
                     ref={tableRef}

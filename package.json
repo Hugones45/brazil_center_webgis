@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.5.1",
+    "@mapbox/shp-write": "^0.4.3",
+    "@simwrapper/shp-write": "^0.3.3",
     "@turf/boolean-intersects": "^7.4.0",
     "@turf/boolean-point-in-polygon": "^7.4.0",
     "@turf/helpers": "^7.4.0",
