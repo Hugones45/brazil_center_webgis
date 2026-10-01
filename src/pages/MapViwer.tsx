@@ -1667,17 +1667,24 @@ const BaseMap = () => {
 
         if (allSurvivors.length === 0) return [];
 
-        // Each surviving segment becomes its own feature. This guarantees
-        // one line per record in the shapefile output.
-        const out: GeoJSON.Feature[] = [];
-        for (const segment of allSurvivors) {
-            out.push(asFeature(
-                { type: 'LineString', coordinates: segment },
+        // Keep 1:1 correspondence between input features and output features.
+        // A single clipped MultiLineString feature is returned per original
+        // feature so attributes (LENGTH, ID, etc.) are not duplicated when a
+        // line is cut at the clip boundary into multiple pieces. This matches
+        // what QGIS Dissolve-by-ID would produce, and keeps Shapefile row
+        // counts aligned with GeoJSON row counts.
+        if (allSurvivors.length === 1) {
+            return [asFeature(
+                { type: 'LineString', coordinates: allSurvivors[0] },
                 feat.properties,
                 feat.id
-            ));
+            )];
         }
-        return out;
+        return [asFeature(
+            { type: 'MultiLineString', coordinates: allSurvivors },
+            feat.properties,
+            feat.id
+        )];
     };
 
     const clipPointFeature = (
