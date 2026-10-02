@@ -950,8 +950,8 @@ const BaseMap = () => {
 
         const theBaseMap = new maplibregl.Map({
             container: mapContainerRef.current,
-            center: [-46.93820917792772, -19.584011291377593],
-            zoom: 5,
+            center: [-53.5, -18.5],   // Centro geográfico do Brasil
+            zoom: 3.5,
             style: SATELLITE_STYLE
         });
 
