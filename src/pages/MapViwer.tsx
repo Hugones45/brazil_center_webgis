@@ -20,33 +20,6 @@ import JSZip from 'jszip';
 const LIGHT_STYLE = 'https://tiles.openfreemap.org/styles/positron';
 const DARK_STYLE = 'https://tiles.openfreemap.org/styles/dark';
 
-const SATELLITE_STYLE: any = {
-    version: 8,
-    sources: {
-        'esri-satellite': {
-            type: 'raster',
-            tiles: [
-                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-            ],
-            tileSize: 256,
-            attribution: '© Esri, Maxar, Earthstar Geographics'
-        }
-    },
-    layers: [
-        { id: 'esri-satellite-layer', type: 'raster', source: 'esri-satellite' }
-    ]
-};
-
-// IDs of the basemap layers that must stay at the very bottom.
-const BASEMAP_LAYER_IDS = new Set([
-    'osm-light-layer',
-    'osm-dark-layer',
-    'esri-satellite-layer'
-]);
-
-// Basemap source IDs (used to swap the basemap without touching other layers).
-const BASEMAP_SOURCE_IDS = ['osm-light', 'osm-dark', 'esri-satellite'];
-
 // ============================================================================
 // SHAPEFILE WRITER
 // ============================================================================
