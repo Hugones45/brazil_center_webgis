@@ -17,43 +17,8 @@ import JSZip from 'jszip';
 // BASEMAP STYLES
 // ============================================================================
 
-const LIGHT_STYLE: any = {
-    version: 8,
-    sources: {
-        'osm-light': {
-            type: 'raster',
-            tiles: [
-                'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
-            ],
-            tileSize: 256,
-            attribution: '© OpenStreetMap contributors'
-        }
-    },
-    layers: [
-        { id: 'osm-light-layer', type: 'raster', source: 'osm-light' }
-    ]
-};
-
-const DARK_STYLE: any = {
-    version: 8,
-    sources: {
-        'osm-dark': {
-            type: 'raster',
-            tiles: [
-                'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-                'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-                'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
-            ],
-            tileSize: 256,
-            attribution: '© CARTO © OpenStreetMap contributors'
-        }
-    },
-    layers: [
-        { id: 'osm-dark-layer', type: 'raster', source: 'osm-dark' }
-    ]
-};
+const LIGHT_STYLE = 'https://tiles.openfreemap.org/styles/positron';
+const DARK_STYLE = 'https://tiles.openfreemap.org/styles/dark';
 
 const SATELLITE_STYLE: any = {
     version: 8,
@@ -78,6 +43,9 @@ const BASEMAP_LAYER_IDS = new Set([
     'osm-dark-layer',
     'esri-satellite-layer'
 ]);
+
+// Basemap source IDs (used to swap the basemap without touching other layers).
+const BASEMAP_SOURCE_IDS = ['osm-light', 'osm-dark', 'esri-satellite'];
 
 // ============================================================================
 // SHAPEFILE WRITER
@@ -1467,45 +1435,97 @@ const BaseMap = () => {
         if (bbox) fitMapToBBox(bbox);
     };
 
+    // ========================================================================
+    // >>> FIX: switchBasemap no longer calls map.setStyle(), which was wiping
+    // every layer/source (Terra Draw's "td-*" layers AND the WMS rasters).
+    // Instead we only remove the current basemap source/layer and add the new
+    // one at the very bottom of the layer stack. Everything else — Terra Draw,
+    // WMS rasters, and the drawn polygon — is preserved untouched.
+    // ========================================================================
+    const SATELLITE_STYLE: any = {
+        version: 8,
+        sources: {
+            'esri-satellite': {
+                type: 'raster',
+                tiles: [
+                    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                ],
+                tileSize: 256,
+                attribution: '© Esri, Maxar, Earthstar Geographics'
+            }
+        },
+        layers: [
+            { id: 'esri-satellite-layer', type: 'raster', source: 'esri-satellite' }
+        ]
+    };
+
+    // Replace the entire switchBasemap function with this one
     const switchBasemap = (type: 'light' | 'dark' | 'satellite') => {
         if (!mapRef.current) return;
-        const styles: Record<string, any> = {
-            light: LIGHT_STYLE,
-            dark: DARK_STYLE,
-            satellite: SATELLITE_STYLE
-        };
+        const map = mapRef.current;
 
-        const layersToRestore = Array.from(currentServerLayersRef.current);
+        // Choose the style: URL for OpenFreeMap, object for satellite
+        const styleUrlOrObject: any = type === 'light'
+            ? LIGHT_STYLE
+            : type === 'dark'
+                ? DARK_STYLE
+                : SATELLITE_STYLE;
 
-        mapRef.current.once('style.load', () => {
-            if (!mapRef.current) return;
-            layersToRestore.forEach(layerName => {
-                try {
-                    if (!mapRef.current!.getSource(layerName)) {
-                        const wmsUrl = `${baseUrl}?service=WMS&version=1.3.0&request=GetMap&layers=${layerName}&styles=&format=image/png&transparent=true&width=256&height=256&crs=EPSG:3857&bbox={bbox-epsg-3857}`;
-                        const tileUrl = needsProxy ? `${CORS_PROXY}${encodeURIComponent(wmsUrl)}` : wmsUrl;
-                        mapRef.current!.addSource(layerName, {
-                            type: 'raster',
-                            tiles: [tileUrl],
-                            tileSize: 256
-                        });
-                        mapRef.current!.addLayer({
-                            id: layerName,
-                            type: 'raster',
-                            source: layerName,
-                            paint: { 'raster-opacity': 0.7 }
-                        });
+        map.setStyle(styleUrlOrObject, {
+            transformStyle: (previousStyle, nextStyle) => {
+                if (!previousStyle) return nextStyle;
+
+                // 1. Identify all layers we must preserve:
+                //    - Terra Draw layers (prefixed with "td-")
+                //    - Active WMS layers (tracked in currentServerLayersRef)
+                const preservedLayerIds = new Set<string>();
+                previousStyle.layers.forEach(layer => {
+                    if (
+                        layer.id.startsWith('td-') ||
+                        currentServerLayersRef.current.has(layer.id)
+                    ) {
+                        preservedLayerIds.add(layer.id);
                     }
-                } catch (e) {
-                    console.warn('Erro ao restaurar camada após mudança de estilo:', e);
-                }
-            });
-            setTimeout(() => bringDrawLayersToFront(), 100);
-            setTimeout(() => bringDrawLayersToFront(), 300);
+                });
+
+                // 2. Collect the sources those layers depend on
+                const preservedSources: Record<string, any> = {};
+                previousStyle.layers.forEach(layer => {
+                    if (preservedLayerIds.has(layer.id)) {
+                        const sourceId = (layer as any).source;
+                        if (sourceId && previousStyle.sources[sourceId]) {
+                            preservedSources[sourceId] = previousStyle.sources[sourceId];
+                        }
+                    }
+                });
+
+                // 3. Collect the actual layer objects
+                const preservedLayers = previousStyle.layers.filter(layer =>
+                    preservedLayerIds.has(layer.id)
+                );
+
+                // 4. Return the new style with our layers merged in
+                return {
+                    ...nextStyle,
+                    sources: {
+                        ...nextStyle.sources,
+                        ...preservedSources
+                    },
+                    layers: [
+                        ...nextStyle.layers,
+                        ...preservedLayers
+                    ]
+                };
+            }
         });
 
-        mapRef.current.setStyle(styles[type]);
         setActiveBasemap(type);
+
+        // After the new style has loaded, make sure Terra Draw sits on top
+        map.once('style.load', () => {
+            setTimeout(() => bringDrawLayersToFront(), 50);
+            setTimeout(() => bringDrawLayersToFront(), 200);
+        });
     };
 
     const toggleLayer = (layerName: string) => {
