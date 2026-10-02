@@ -17,8 +17,70 @@ import JSZip from 'jszip';
 // BASEMAP STYLES
 // ============================================================================
 
-const LIGHT_STYLE = 'https://tiles.openfreemap.org/styles/positron';
-const DARK_STYLE = 'https://tiles.openfreemap.org/styles/dark';
+const LIGHT_STYLE: any = {
+    version: 8,
+    sources: {
+        'osm-light': {
+            type: 'raster',
+            tiles: [
+                'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+            ],
+            tileSize: 256,
+            attribution: '© OpenStreetMap contributors'
+        }
+    },
+    layers: [
+        { id: 'osm-light-layer', type: 'raster', source: 'osm-light' }
+    ]
+};
+
+const DARK_STYLE: any = {
+    version: 8,
+    sources: {
+        'osm-dark': {
+            type: 'raster',
+            tiles: [
+                'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+                'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+                'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+            ],
+            tileSize: 256,
+            attribution: '© CARTO © OpenStreetMap contributors'
+        }
+    },
+    layers: [
+        { id: 'osm-dark-layer', type: 'raster', source: 'osm-dark' }
+    ]
+};
+
+const SATELLITE_STYLE: any = {
+    version: 8,
+    sources: {
+        'esri-satellite': {
+            type: 'raster',
+            tiles: [
+                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+            ],
+            tileSize: 256,
+            attribution: '© Esri, Maxar, Earthstar Geographics'
+        }
+    },
+    layers: [
+        { id: 'esri-satellite-layer', type: 'raster', source: 'esri-satellite' }
+    ]
+};
+
+// IDs of the basemap layers that must stay at the very bottom.
+const BASEMAP_LAYER_IDS = new Set([
+    'osm-light-layer',
+    'osm-dark-layer',
+    'esri-satellite-layer'
+]);
+
+// Basemap source IDs (used to swap the basemap without touching other layers).
+const BASEMAP_SOURCE_IDS = ['osm-light', 'osm-dark', 'esri-satellite'];
 
 // ============================================================================
 // SHAPEFILE WRITER
@@ -735,7 +797,7 @@ const BaseMap = () => {
     const [drawingEnabled, setDrawingEnabled] = useState(false);
     const [spatialFilter, setSpatialFilter] = useState<GeoJSON.Geometry | null>(null);
 
-    const [activeBasemap, setActiveBasemap] = useState<'light' | 'dark' | 'satellite'>('light');
+    const [activeBasemap, setActiveBasemap] = useState<'light' | 'dark' | 'satellite'>('satellite');
     const [serverPanelCollapsed, setServerPanelCollapsed] = useState(false);
     const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
 
@@ -890,7 +952,7 @@ const BaseMap = () => {
             container: mapContainerRef.current,
             center: [-46.93820917792772, -19.584011291377593],
             zoom: 5,
-            style: LIGHT_STYLE
+            style: SATELLITE_STYLE
         });
 
         mapRef.current = theBaseMap;
@@ -1409,96 +1471,57 @@ const BaseMap = () => {
     };
 
     // ========================================================================
-    // >>> FIX: switchBasemap no longer calls map.setStyle(), which was wiping
-    // every layer/source (Terra Draw's "td-*" layers AND the WMS rasters).
-    // Instead we only remove the current basemap source/layer and add the new
-    // one at the very bottom of the layer stack. Everything else — Terra Draw,
-    // WMS rasters, and the drawn polygon — is preserved untouched.
+    // switchBasemap: only swaps the basemap raster source/layer by ID.
+    // Terra Draw, WMS layers, and the drawn polygon are NEVER touched.
     // ========================================================================
-    const SATELLITE_STYLE: any = {
-        version: 8,
-        sources: {
-            'esri-satellite': {
-                type: 'raster',
-                tiles: [
-                    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                ],
-                tileSize: 256,
-                attribution: '© Esri, Maxar, Earthstar Geographics'
-            }
-        },
-        layers: [
-            { id: 'esri-satellite-layer', type: 'raster', source: 'esri-satellite' }
-        ]
-    };
-
-    // Replace the entire switchBasemap function with this one
     const switchBasemap = (type: 'light' | 'dark' | 'satellite') => {
         if (!mapRef.current) return;
         const map = mapRef.current;
 
-        // Choose the style: URL for OpenFreeMap, object for satellite
-        const styleUrlOrObject: any = type === 'light'
-            ? LIGHT_STYLE
-            : type === 'dark'
-                ? DARK_STYLE
-                : SATELLITE_STYLE;
-
-        map.setStyle(styleUrlOrObject, {
-            transformStyle: (previousStyle, nextStyle) => {
-                if (!previousStyle) return nextStyle;
-
-                // 1. Identify all layers we must preserve:
-                //    - Terra Draw layers (prefixed with "td-")
-                //    - Active WMS layers (tracked in currentServerLayersRef)
-                const preservedLayerIds = new Set<string>();
-                previousStyle.layers.forEach(layer => {
-                    if (
-                        layer.id.startsWith('td-') ||
-                        currentServerLayersRef.current.has(layer.id)
-                    ) {
-                        preservedLayerIds.add(layer.id);
-                    }
-                });
-
-                // 2. Collect the sources those layers depend on
-                const preservedSources: Record<string, any> = {};
-                previousStyle.layers.forEach(layer => {
-                    if (preservedLayerIds.has(layer.id)) {
-                        const sourceId = (layer as any).source;
-                        if (sourceId && previousStyle.sources[sourceId]) {
-                            preservedSources[sourceId] = previousStyle.sources[sourceId];
-                        }
-                    }
-                });
-
-                // 3. Collect the actual layer objects
-                const preservedLayers = previousStyle.layers.filter(layer =>
-                    preservedLayerIds.has(layer.id)
-                );
-
-                // 4. Return the new style with our layers merged in
-                return {
-                    ...nextStyle,
-                    sources: {
-                        ...nextStyle.sources,
-                        ...preservedSources
-                    },
-                    layers: [
-                        ...nextStyle.layers,
-                        ...preservedLayers
-                    ]
-                };
+        // 1) Remove any existing basemap layers
+        const styleLayers = map.getStyle()?.layers || [];
+        styleLayers.forEach((l: any) => {
+            if (l && BASEMAP_LAYER_IDS.has(l.id)) {
+                try { map.removeLayer(l.id); } catch (e) { }
             }
         });
 
+        // 2) Remove any existing basemap sources
+        BASEMAP_SOURCE_IDS.forEach(id => {
+            if (map.getSource(id)) {
+                try { map.removeSource(id); } catch (e) { }
+            }
+        });
+
+        // 3) Add the new basemap source + layer at the very bottom
+        const styles: Record<string, any> = {
+            light: LIGHT_STYLE,
+            dark: DARK_STYLE,
+            satellite: SATELLITE_STYLE
+        };
+        const style = styles[type];
+        const sourceKey = Object.keys(style.sources)[0] as string;
+        const sourceDef = style.sources[sourceKey];
+        const layerDef = style.layers[0];
+
+        try {
+            map.addSource(sourceKey, sourceDef);
+            const currentLayers = map.getStyle()?.layers || [];
+            const firstLayerId = currentLayers[0]?.id;
+            if (firstLayerId) {
+                map.addLayer(layerDef, firstLayerId);
+            } else {
+                map.addLayer(layerDef);
+            }
+        } catch (e) {
+            console.warn('Erro ao adicionar novo basemap:', e);
+        }
+
         setActiveBasemap(type);
 
-        // After the new style has loaded, make sure Terra Draw sits on top
-        map.once('style.load', () => {
-            setTimeout(() => bringDrawLayersToFront(), 50);
-            setTimeout(() => bringDrawLayersToFront(), 200);
-        });
+        // Keep Terra Draw layers on top just to be safe.
+        setTimeout(() => bringDrawLayersToFront(), 50);
+        setTimeout(() => bringDrawLayersToFront(), 200);
     };
 
     const toggleLayer = (layerName: string) => {
@@ -2486,38 +2509,6 @@ const BaseMap = () => {
                                             </div>
                                             <div style={{ display: 'flex', gap: 4 }}>
                                                 <button
-                                                    onClick={() => switchBasemap('light')}
-                                                    style={{
-                                                        flex: 1,
-                                                        padding: '6px 4px',
-                                                        fontSize: 11,
-                                                        backgroundColor: activeBasemap === 'light' ? '#EC6A2B' : 'white',
-                                                        color: activeBasemap === 'light' ? 'white' : '#3B3B3B',
-                                                        border: '1px solid ' + (activeBasemap === 'light' ? '#EC6A2B' : '#E0E0E0'),
-                                                        borderRadius: 4,
-                                                        cursor: 'pointer',
-                                                        fontWeight: 'bold'
-                                                    }}
-                                                >
-                                                    ☀️ Claro
-                                                </button>
-                                                <button
-                                                    onClick={() => switchBasemap('dark')}
-                                                    style={{
-                                                        flex: 1,
-                                                        padding: '6px 4px',
-                                                        fontSize: 11,
-                                                        backgroundColor: activeBasemap === 'dark' ? '#EC6A2B' : 'white',
-                                                        color: activeBasemap === 'dark' ? 'white' : '#3B3B3B',
-                                                        border: '1px solid ' + (activeBasemap === 'dark' ? '#EC6A2B' : '#E0E0E0'),
-                                                        borderRadius: 4,
-                                                        cursor: 'pointer',
-                                                        fontWeight: 'bold'
-                                                    }}
-                                                >
-                                                    🌙 Escuro
-                                                </button>
-                                                <button
                                                     onClick={() => switchBasemap('satellite')}
                                                     style={{
                                                         flex: 1,
@@ -2532,6 +2523,22 @@ const BaseMap = () => {
                                                     }}
                                                 >
                                                     🛰️ Satélite
+                                                </button>
+                                                <button
+                                                    onClick={() => switchBasemap('light')}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '6px 4px',
+                                                        fontSize: 11,
+                                                        backgroundColor: activeBasemap === 'light' ? '#EC6A2B' : 'white',
+                                                        color: activeBasemap === 'light' ? 'white' : '#3B3B3B',
+                                                        border: '1px solid ' + (activeBasemap === 'light' ? '#EC6A2B' : '#E0E0E0'),
+                                                        borderRadius: 4,
+                                                        cursor: 'pointer',
+                                                        fontWeight: 'bold'
+                                                    }}
+                                                >
+                                                    ☀️ Claro
                                                 </button>
                                             </div>
                                         </div>
