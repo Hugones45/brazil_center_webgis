@@ -72,12 +72,14 @@ const SATELLITE_STYLE: any = {
     ]
 };
 
+// IDs of the basemap layers that must stay at the very bottom.
 const BASEMAP_LAYER_IDS = new Set([
     'osm-light-layer',
     'osm-dark-layer',
     'esri-satellite-layer'
 ]);
 
+// Basemap source IDs (used to swap the basemap without touching other layers).
 const BASEMAP_SOURCE_IDS = ['osm-light', 'osm-dark', 'esri-satellite'];
 
 // ============================================================================
@@ -922,15 +924,10 @@ const BaseMap = () => {
     useEffect(() => { handleDrawUpdateRef.current = handleDrawUpdate; }, [handleDrawUpdate]);
     useEffect(() => { handleDrawDeleteRef.current = handleDrawDelete; }, [handleDrawDelete]);
 
-    // ========================================================================
-    // FIX: bringDrawLayersToFront — this is the function that keeps the drawn
-    // polygon above every WMS raster layer. The reason it "worked on local
-    // and not on Vercel" is that Terra Draw creates its layers asynchronously,
-    // and on a slower production build the layer can be created AFTER the
-    // last setTimeout fires. We now also trigger this promotion from within
-    // the draw event handlers and the map's styledata event, so it always
-    // runs at the right time regardless of timing.
-    // ========================================================================
+    // >>> FIX: only promote Terra Draw's own layers (prefixed "td-") to the
+    // very top so the polygon the user is drawing always stays ABOVE every
+    // WMS raster. The previous implementation promoted every non-basemap
+    // layer in iteration order, which pushed WMS layers above the drawing.
     const bringDrawLayersToFront = useCallback(() => {
         if (!mapRef.current) return;
         const style = mapRef.current.getStyle();
@@ -953,7 +950,7 @@ const BaseMap = () => {
 
         const theBaseMap = new maplibregl.Map({
             container: mapContainerRef.current,
-            center: [-53.5, -18.5],
+            center: [-53.5, -18.5],   // Centro geográfico do Brasil
             zoom: 3.5,
             style: SATELLITE_STYLE
         });
@@ -1048,9 +1045,6 @@ const BaseMap = () => {
                     } catch (e) {
                         console.warn('Erro no handler de finish:', e);
                     }
-                    // Promote immediately + on next frame + short timers.
-                    bringDrawLayersToFront();
-                    requestAnimationFrame(bringDrawLayersToFront);
                     setTimeout(() => bringDrawLayersToFront(), 50);
                     setTimeout(() => bringDrawLayersToFront(), 200);
                 });
@@ -1068,13 +1062,6 @@ const BaseMap = () => {
                             setSpatialFilter(poly.geometry);
                         }
                     } catch (e) { }
-                });
-
-                // Also promote on every style update. This catches any layer
-                // that Terra Draw adds *after* our timers fire (which is the
-                // exact reason the polygon was missing on Vercel).
-                theBaseMap.on('styledata', () => {
-                    bringDrawLayersToFront();
                 });
             } catch (e) {
                 console.warn('Falha ao inicializar Terra Draw:', e);
@@ -1483,10 +1470,15 @@ const BaseMap = () => {
         if (bbox) fitMapToBBox(bbox);
     };
 
+    // ========================================================================
+    // switchBasemap: only swaps the basemap raster source/layer by ID.
+    // Terra Draw, WMS layers, and the drawn polygon are NEVER touched.
+    // ========================================================================
     const switchBasemap = (type: 'light' | 'dark' | 'satellite') => {
         if (!mapRef.current) return;
         const map = mapRef.current;
 
+        // 1) Remove any existing basemap layers
         const styleLayers = map.getStyle()?.layers || [];
         styleLayers.forEach((l: any) => {
             if (l && BASEMAP_LAYER_IDS.has(l.id)) {
@@ -1494,12 +1486,14 @@ const BaseMap = () => {
             }
         });
 
+        // 2) Remove any existing basemap sources
         BASEMAP_SOURCE_IDS.forEach(id => {
             if (map.getSource(id)) {
                 try { map.removeSource(id); } catch (e) { }
             }
         });
 
+        // 3) Add the new basemap source + layer at the very bottom
         const styles: Record<string, any> = {
             light: LIGHT_STYLE,
             dark: DARK_STYLE,
@@ -1525,6 +1519,7 @@ const BaseMap = () => {
 
         setActiveBasemap(type);
 
+        // Keep Terra Draw layers on top just to be safe.
         setTimeout(() => bringDrawLayersToFront(), 50);
         setTimeout(() => bringDrawLayersToFront(), 200);
     };
@@ -2731,7 +2726,7 @@ const BaseMap = () => {
                                                 flex: 1,
                                             }}
                                         >
-                                            {drawingEnabled ? 'Parar Desenho' : '✏️ Desenhar Área de Interesse'}
+                                            {drawingEnabled ? '#D64A12 Parar Desenho' : '✏️ Desenhar Área de Interesse'}
                                         </button>
                                     </div>
 
