@@ -175,10 +175,10 @@ const MapViwer = () => {
     useEffect(() => { handleDrawDeleteRef.current = handleDrawDelete; }, [handleDrawDelete]);
 
     // ========================================================================
-    // ✅ FIX CRÍTICO: Aplica manualmente as cores (paint) nas camadas do
-    // TerraDraw. Necessário porque em builds de produção o
-    // terra-draw-maplibre-gl-adapter deixa o `paint` vazio, tornando o
-    // polígono invisível. Em dev funciona, em prod não.
+    // ✅ FIX: aplica manualmente as cores nas camadas do TerraDraw
+    // lendo das propriedades da feature. Necessário porque em produção o
+    // adapter deixa `paint: {}` vazio, tornando o polígono invisível.
+    // Puro JS, sem arquivo externo, sem setWorkerUrl.
     // ========================================================================
     const applyTerraDrawPaint = useCallback(() => {
         const map = mapRef.current;
@@ -202,7 +202,7 @@ const MapViwer = () => {
                 map.setPaintProperty('td-point', 'circle-radius', ['coalesce', ['get', 'pointWidth'], 6]);
             }
         } catch (e) {
-            console.error('❌ Erro ao aplicar paint:', e);
+            console.warn('[applyPaint] erro:', e);
         }
     }, []);
 
@@ -255,7 +255,7 @@ const MapViwer = () => {
                 draw.setMode('select');
                 drawRef.current = draw;
 
-                // ✅ FIX: aplica o paint assim que as camadas existirem
+                // Aplica o paint assim que a camada td-polygon existir (polling curto)
                 const paintInterval = setInterval(() => {
                     if (mapRef.current?.getLayer('td-polygon')) {
                         applyTerraDrawPaint();
@@ -277,7 +277,7 @@ const MapViwer = () => {
                             else handleDrawCreateRef.current({ features: [asGeoJSONFeature as any] });
                             try { draw.setMode('select'); } catch (e) { }
                         }
-                    } catch (e) { console.error('[TERRADRAW] Erro no finish:', e); }
+                    } catch (e) { }
                     applyTerraDrawPaint();
                     setTimeout(() => { applyTerraDrawPaint(); bringDrawLayersToFront(); }, 50);
                     setTimeout(() => { applyTerraDrawPaint(); bringDrawLayersToFront(); }, 200);
@@ -295,9 +295,7 @@ const MapViwer = () => {
                         if (poly) setSpatialFilter(poly.geometry);
                     } catch (e) { }
                 });
-            } catch (e) {
-                console.error('[TERRADRAW] ❌ ERRO FATAL:', e);
-            }
+            } catch (e) { }
             applyTerraDrawPaint();
             setTimeout(() => bringDrawLayersToFront(), 200);
         });
