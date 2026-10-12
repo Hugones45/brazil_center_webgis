@@ -174,21 +174,34 @@ const MapViwer = () => {
     useEffect(() => { handleDrawUpdateRef.current = handleDrawUpdate; }, [handleDrawUpdate]);
     useEffect(() => { handleDrawDeleteRef.current = handleDrawDelete; }, [handleDrawDelete]);
 
-    // >>> FIX: Restaurado do BaseMap.tsx original — só promove camadas do TerraDraw ("td-")
     const bringDrawLayersToFront = useCallback(() => {
-        if (!mapRef.current) return;
+        if (!mapRef.current) {
+            console.log('[bringDrawLayers] mapRef.current é null');
+            return;
+        }
         const style = mapRef.current.getStyle();
-        if (!style || !style.layers) return;
-        const ids = style.layers.map((l: any) => l.id as string);
-        ids.forEach((id) => {
-            if (typeof id !== 'string') return;
-            if (!id.startsWith('td-')) return;
-            try { if (mapRef.current?.getLayer(id)) mapRef.current.moveLayer(id); } catch (e) { }
+        if (!style || !style.layers) {
+            console.log('[bringDrawLayers] style ou style.layers é null');
+            return;
+        }
+        const tdLayers = style.layers.filter((l: any) => typeof l.id === 'string' && l.id.startsWith('td-'));
+        console.log(`[bringDrawLayers] Encontradas ${tdLayers.length} camadas td-*`, tdLayers.map((l: any) => l.id));
+        tdLayers.forEach((l: any) => {
+            try {
+                if (mapRef.current?.getLayer(l.id)) {
+                    mapRef.current.moveLayer(l.id);
+                    console.log(`[bringDrawLayers] moveLayer OK: ${l.id}`);
+                }
+            } catch (e) {
+                console.error(`[bringDrawLayers] ERRO ao mover ${l.id}:`, e);
+            }
         });
     }, []);
 
     useEffect(() => {
         if (!mapContainerRef.current) return;
+        console.log('═══════════════════════════════════════');
+        console.log('[MAP] Iniciando MapLibre...');
         const theBaseMap = new maplibregl.Map({
             container: mapContainerRef.current,
             center: [-53.5, -18.5],
@@ -198,8 +211,10 @@ const MapViwer = () => {
         mapRef.current = theBaseMap;
 
         theBaseMap.on("load", () => {
+            console.log('[MAP] Evento load disparado');
             setIsReady(true);
             try {
+                console.log('[TERRADRAW] Criando instância...');
                 const draw = new TerraDraw({
                     adapter: new TerraDrawMapLibreGLAdapter({ map: theBaseMap as any }),
                     modes: [
@@ -220,15 +235,18 @@ const MapViwer = () => {
                         } as any)
                     ]
                 });
+                console.log('[TERRADRAW] Instância criada. Chamando draw.start()...');
                 draw.start();
+                console.log('[TERRADRAW] draw.start() OK. Chamando setMode("select")...');
                 draw.setMode('select');
+                console.log('[TERRADRAW] ✅ Pronto. Modo atual:', (draw as any).getMode?.());
                 drawRef.current = draw;
 
-                // ✅ FIX #2: restaurado o par 50/200ms que existia no BaseMap.tsx
                 setTimeout(() => bringDrawLayersToFront(), 50);
                 setTimeout(() => bringDrawLayersToFront(), 200);
 
                 draw.on('finish', (id: string | number) => {
+                    console.log('[TERRADRAW] Evento finish:', id);
                     try {
                         const snapshot: any[] = draw.getSnapshot();
                         const feature = snapshot.find((f: any) => f.id === id);
@@ -238,18 +256,13 @@ const MapViwer = () => {
                             else handleDrawCreateRef.current({ features: [asGeoJSONFeature as any] });
                             try { draw.setMode('select'); } catch (e) { }
                         }
-                    } catch (e) {
-                        console.warn('Erro no handler de finish:', e);
-                    }
-                    // ✅ FIX #3: restaurado o par 50/200ms pós-finish
+                    } catch (e) { console.error('[TERRADRAW] Erro no finish:', e); }
                     setTimeout(() => bringDrawLayersToFront(), 50);
                     setTimeout(() => bringDrawLayersToFront(), 200);
                 });
 
-                // ✅ FIX #1 (O MAIS CRÍTICO): restaurado bringDrawLayersToFront() SÍNCRONO no change
                 draw.on('change', () => {
                     bringDrawLayersToFront();
-
                     try {
                         const mode = (draw as any).getMode ? (draw as any).getMode() : null;
                         if (mode === 'polygon') return;
@@ -260,10 +273,8 @@ const MapViwer = () => {
                     } catch (e) { }
                 });
             } catch (e) {
-                console.warn('Falha ao inicializar Terra Draw:', e);
+                console.error('[TERRADRAW] ❌ ERRO FATAL:', e);
             }
-
-            // ✅ FIX #4: restaurado o setTimeout final fora do try/catch
             setTimeout(() => bringDrawLayersToFront(), 200);
         });
 
@@ -575,14 +586,30 @@ const MapViwer = () => {
     const paginatedData = tableData.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
 
     const handleDrawingToggle = () => {
-        if (!drawRef.current) return;
+        console.log('═══════════════════════════════════════');
+        console.log('[handleDrawingToggle] Chamado. drawingEnabled =', drawingEnabled);
+        console.log('[handleDrawingToggle] drawRef.current existe?', !!drawRef.current);
+
+        if (!drawRef.current) {
+            console.error('[handleDrawingToggle] ❌ drawRef.current é null! TerraDraw não foi inicializado.');
+            alert('Erro: ferramenta de desenho não inicializada. Verifique o console (F12).');
+            return;
+        }
+
         if (drawingEnabled) {
-            try { drawRef.current.clear(); } catch (e) { }
-            try { drawRef.current.setMode('select'); } catch (e) { }
+            console.log('[handleDrawingToggle] Desativando desenho...');
+            try { drawRef.current.clear(); } catch (e) { console.error(e); }
+            try { drawRef.current.setMode('select'); } catch (e) { console.error(e); }
             setDrawingEnabled(false); setSpatialFilter(null);
         } else {
+            console.log('[handleDrawingToggle] Ativando modo polygon...');
             if (spatialFilter) { try { drawRef.current.clear(); } catch (e) { } setSpatialFilter(null); }
-            try { drawRef.current.setMode('polygon'); } catch (e) { }
+            try {
+                drawRef.current.setMode('polygon');
+                console.log('[handleDrawingToggle] ✅ setMode("polygon") OK. Modo atual:', (drawRef.current as any).getMode?.());
+            } catch (e) {
+                console.error('[handleDrawingToggle] ❌ ERRO ao setar polygon:', e);
+            }
             setDrawingEnabled(true);
         }
         setTimeout(() => bringDrawLayersToFront(), 50);
