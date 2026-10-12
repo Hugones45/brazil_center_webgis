@@ -62,7 +62,6 @@ const MapViwer = () => {
     const [rowsPerPage, setRowsPerPage] = useState(50);
 
     const [tableHeight, setTableHeight] = useState(35);
-    const tableRef = useRef<HTMLDivElement>(null);
     const isDraggingRef = useRef(false);
     const dragStartYRef = useRef(0);
     const startHeightRef = useRef(0);
