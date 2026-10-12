@@ -14,6 +14,41 @@ import midpoint from '@turf/midpoint';
 import JSZip from 'jszip';
 
 // ============================================================================
+// [TD-DIAG] HELPERS
+// ============================================================================
+
+const TD_LOG = (...args: any[]) => {
+    // eslint-disable-next-line no-console
+    console.log('%c[TD-DIAG]', 'color:#EC6A2B;font-weight:bold', ...args);
+};
+
+const tdDumpLayers = (map: maplibregl.Map | null, tag: string) => {
+    if (!map) { TD_LOG(tag, 'map is NULL'); return; }
+    let ids: string[] = [];
+    try { ids = map.getStyle().layers.map((l: any) => l.id); } catch (e) { TD_LOG(tag, 'getStyle failed', e); return; }
+    const tdIds = ids.filter(id => typeof id === 'string' && id.startsWith('td-'));
+    TD_LOG(tag, 'TOTAL LAYERS =', ids.length);
+    TD_LOG(tag, 'TD-* LAYERS   =', tdIds);
+    TD_LOG(tag, 'TOP 5 LAYERS  =', ids.slice(-5));
+    TD_LOG(tag, 'BOTTOM 3      =', ids.slice(0, 3));
+};
+
+const tdDumpDraw = (draw: any, tag: string) => {
+    if (!draw) { TD_LOG(tag, 'draw is NULL'); return; }
+    let snap: any[] = [];
+    let mode: any = null;
+    try { snap = draw.getSnapshot(); } catch (e) { }
+    try { mode = draw.getMode ? draw.getMode() : null; } catch (e) { }
+    TD_LOG(tag, 'mode =', mode);
+    TD_LOG(tag, 'snapshot length =', snap.length);
+    if (snap.length > 0) {
+        snap.forEach((f, i) => {
+            TD_LOG(tag, `snap[${i}] id=${f.id} geom=${f.geometry?.type} props=`, f.properties);
+        });
+    }
+};
+
+// ============================================================================
 // BASEMAP STYLES
 // ============================================================================
 
@@ -72,14 +107,12 @@ const SATELLITE_STYLE: any = {
     ]
 };
 
-// IDs of the basemap layers that must stay at the very bottom.
 const BASEMAP_LAYER_IDS = new Set([
     'osm-light-layer',
     'osm-dark-layer',
     'esri-satellite-layer'
 ]);
 
-// Basemap source IDs (used to swap the basemap without touching other layers).
 const BASEMAP_SOURCE_IDS = ['osm-light', 'osm-dark', 'esri-satellite'];
 
 // ============================================================================
@@ -888,6 +921,7 @@ const BaseMap = () => {
     }, [handleDragMove]);
 
     const handleDrawCreate = useCallback((e: { features: GeoJSON.Feature[] }) => {
+        TD_LOG('handleDrawCreate', e.features);
         const feature = e.features[0];
         if (feature.geometry.type === 'Polygon') {
             setSpatialFilter(feature.geometry);
@@ -899,6 +933,7 @@ const BaseMap = () => {
     }, [selectedLayerForTable]);
 
     const handleDrawUpdate = useCallback((e: { features: GeoJSON.Feature[] }) => {
+        TD_LOG('handleDrawUpdate', e.features);
         const feature = e.features[0];
         if (feature.geometry.type === 'Polygon') {
             setSpatialFilter(feature.geometry);
@@ -909,6 +944,7 @@ const BaseMap = () => {
     }, [selectedLayerForTable]);
 
     const handleDrawDelete = useCallback(() => {
+        TD_LOG('handleDrawDelete');
         setSpatialFilter(null);
         setDrawingEnabled(false);
         if (selectedLayerForTable) {
@@ -924,25 +960,24 @@ const BaseMap = () => {
     useEffect(() => { handleDrawUpdateRef.current = handleDrawUpdate; }, [handleDrawUpdate]);
     useEffect(() => { handleDrawDeleteRef.current = handleDrawDelete; }, [handleDrawDelete]);
 
-    // >>> FIX: only promote Terra Draw's own layers (prefixed "td-") to the
-    // very top so the polygon the user is drawing always stays ABOVE every
-    // WMS raster. The previous implementation promoted every non-basemap
-    // layer in iteration order, which pushed WMS layers above the drawing.
     const bringDrawLayersToFront = useCallback(() => {
         if (!mapRef.current) return;
         const style = mapRef.current.getStyle();
         if (!style || !style.layers) return;
 
         const ids = style.layers.map((l: any) => l.id as string);
+        const moved: string[] = [];
         ids.forEach((id) => {
             if (typeof id !== 'string') return;
             if (!id.startsWith('td-')) return;
             try {
                 if (mapRef.current?.getLayer(id)) {
                     mapRef.current.moveLayer(id);
+                    moved.push(id);
                 }
             } catch (e) { }
         });
+        TD_LOG('bringDrawLayersToFront -> moved TD layers:', moved);
     }, []);
 
     useEffect(() => {
@@ -950,17 +985,24 @@ const BaseMap = () => {
 
         const theBaseMap = new maplibregl.Map({
             container: mapContainerRef.current,
-            center: [-53.5, -18.5],   // Centro geográfico do Brasil
+            center: [-53.5, -18.5],
             zoom: 3.5,
             style: SATELLITE_STYLE
         });
 
         mapRef.current = theBaseMap;
 
+        TD_LOG('Map created. Waiting for load...');
+
         theBaseMap.on("load", () => {
+            TD_LOG('Map load event fired.');
             setIsReady(true);
 
+            // Dump the layers right after load (before TerraDraw is started)
+            tdDumpLayers(theBaseMap, 'AFTER MAP LOAD (before TD start)');
+
             try {
+                TD_LOG('Creating TerraDraw...');
                 const draw = new TerraDraw({
                     adapter: new TerraDrawMapLibreGLAdapter({
                         map: theBaseMap as any
@@ -1018,17 +1060,48 @@ const BaseMap = () => {
                     ]
                 });
 
+                TD_LOG('TerraDraw instance created. Calling start()...');
                 draw.start();
+                TD_LOG('TerraDraw start() done. Setting mode to select...');
                 draw.setMode('select');
+                TD_LOG('TerraDraw mode = select.');
                 drawRef.current = draw;
+
+                // Expose for manual console poking
+                (window as any).__tdMap = theBaseMap;
+                (window as any).__tdDraw = draw;
+                TD_LOG('Exposed window.__tdMap and window.__tdDraw for manual inspection.');
+
+                // Inspect layers right after TD starts
+                setTimeout(() => {
+                    TD_LOG('--- TD LAYER CHECK @50ms after start ---');
+                    tdDumpLayers(theBaseMap, '@50ms');
+                    tdDumpDraw(draw, '@50ms');
+                }, 50);
+
+                setTimeout(() => {
+                    TD_LOG('--- TD LAYER CHECK @500ms after start ---');
+                    tdDumpLayers(theBaseMap, '@500ms');
+                    tdDumpDraw(draw, '@500ms');
+                }, 500);
+
+                setTimeout(() => {
+                    TD_LOG('--- TD LAYER CHECK @2000ms after start ---');
+                    tdDumpLayers(theBaseMap, '@2000ms');
+                    tdDumpDraw(draw, '@2000ms');
+                }, 2000);
 
                 setTimeout(() => bringDrawLayersToFront(), 50);
                 setTimeout(() => bringDrawLayersToFront(), 200);
 
                 draw.on('finish', (id: string | number) => {
+                    TD_LOG('===== draw.on("finish") fired. id =', id, '=====');
+                    tdDumpDraw(draw, 'ON FINISH');
+                    tdDumpLayers(theBaseMap, 'ON FINISH');
                     try {
                         const snapshot: any[] = draw.getSnapshot();
                         const feature = snapshot.find((f: any) => f.id === id);
+                        TD_LOG('Finish: found feature in snapshot?', !!feature, feature?.geometry?.type);
                         if (feature && feature.geometry && feature.geometry.type === 'Polygon') {
                             const asGeoJSONFeature = {
                                 type: 'Feature',
@@ -1050,6 +1123,13 @@ const BaseMap = () => {
                 });
 
                 draw.on('change', () => {
+                    // Only log every 25 changes to avoid flooding the console
+                    (window as any).__tdChangeTick = ((window as any).__tdChangeTick || 0) + 1;
+                    if ((window as any).__tdChangeTick % 25 === 1) {
+                        TD_LOG('draw.on("change") tick#', (window as any).__tdChangeTick);
+                        tdDumpDraw(draw, 'ON CHANGE tick#' + (window as any).__tdChangeTick);
+                    }
+
                     bringDrawLayersToFront();
 
                     try {
@@ -1063,8 +1143,18 @@ const BaseMap = () => {
                         }
                     } catch (e) { }
                 });
+
+                draw.on('select', (id: string | number) => {
+                    TD_LOG('draw.on("select") id =', id);
+                });
+
+                draw.on('deselect', () => {
+                    TD_LOG('draw.on("deselect")');
+                });
+
             } catch (e) {
                 console.warn('Falha ao inicializar Terra Draw:', e);
+                TD_LOG('FAILED to initialize TerraDraw:', e);
             }
 
             setTimeout(() => bringDrawLayersToFront(), 200);
@@ -1470,15 +1560,11 @@ const BaseMap = () => {
         if (bbox) fitMapToBBox(bbox);
     };
 
-    // ========================================================================
-    // switchBasemap: only swaps the basemap raster source/layer by ID.
-    // Terra Draw, WMS layers, and the drawn polygon are NEVER touched.
-    // ========================================================================
     const switchBasemap = (type: 'light' | 'dark' | 'satellite') => {
+        TD_LOG('switchBasemap called with', type);
         if (!mapRef.current) return;
         const map = mapRef.current;
 
-        // 1) Remove any existing basemap layers
         const styleLayers = map.getStyle()?.layers || [];
         styleLayers.forEach((l: any) => {
             if (l && BASEMAP_LAYER_IDS.has(l.id)) {
@@ -1486,14 +1572,12 @@ const BaseMap = () => {
             }
         });
 
-        // 2) Remove any existing basemap sources
         BASEMAP_SOURCE_IDS.forEach(id => {
             if (map.getSource(id)) {
                 try { map.removeSource(id); } catch (e) { }
             }
         });
 
-        // 3) Add the new basemap source + layer at the very bottom
         const styles: Record<string, any> = {
             light: LIGHT_STYLE,
             dark: DARK_STYLE,
@@ -1519,9 +1603,10 @@ const BaseMap = () => {
 
         setActiveBasemap(type);
 
-        // Keep Terra Draw layers on top just to be safe.
         setTimeout(() => bringDrawLayersToFront(), 50);
         setTimeout(() => bringDrawLayersToFront(), 200);
+
+        tdDumpLayers(map, 'AFTER switchBasemap');
     };
 
     const toggleLayer = (layerName: string) => {
@@ -1573,6 +1658,8 @@ const BaseMap = () => {
                 setTimeout(() => bringDrawLayersToFront(), 200);
 
                 zoomToLayer(layerName);
+
+                tdDumpLayers(mapRef.current, `AFTER adding WMS layer ${layerName}`);
             }
         }
 
@@ -2697,11 +2784,14 @@ const BaseMap = () => {
                                             onClick={() => {
                                                 if (!drawRef.current) return;
 
+                                                TD_LOG('Draw button clicked. drawingEnabled =', drawingEnabled);
+
                                                 if (drawingEnabled) {
                                                     try { drawRef.current.clear(); } catch (e) { }
                                                     try { drawRef.current.setMode('select'); } catch (e) { }
                                                     setDrawingEnabled(false);
                                                     setSpatialFilter(null);
+                                                    TD_LOG('Stopped drawing. Mode -> select.');
                                                 } else {
                                                     if (spatialFilter) {
                                                         try { drawRef.current.clear(); } catch (e) { }
@@ -2709,7 +2799,11 @@ const BaseMap = () => {
                                                     }
                                                     try { drawRef.current.setMode('polygon'); } catch (e) { }
                                                     setDrawingEnabled(true);
+                                                    TD_LOG('Started drawing. Mode -> polygon.');
                                                 }
+
+                                                tdDumpDraw(drawRef.current, 'AFTER draw button click');
+                                                tdDumpLayers(mapRef.current, 'AFTER draw button click');
 
                                                 setTimeout(() => bringDrawLayersToFront(), 50);
                                                 setTimeout(() => bringDrawLayersToFront(), 200);
@@ -2757,6 +2851,7 @@ const BaseMap = () => {
                                             <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
                                                 <button
                                                     onClick={() => {
+                                                        TD_LOG('Clear area clicked.');
                                                         if (drawRef.current) {
                                                             try { drawRef.current.clear(); } catch (e) { }
                                                         }
@@ -2765,6 +2860,9 @@ const BaseMap = () => {
                                                         if (selectedLayerForTable) {
                                                             openAttributeTable(selectedLayerForTable);
                                                         }
+
+                                                        tdDumpDraw(drawRef.current, 'AFTER clear area');
+                                                        tdDumpLayers(mapRef.current, 'AFTER clear area');
 
                                                         setTimeout(() => bringDrawLayersToFront(), 50);
                                                     }}
