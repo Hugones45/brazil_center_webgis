@@ -190,7 +190,6 @@ const MapViwer = () => {
             try {
                 if (mapRef.current?.getLayer(l.id)) {
                     mapRef.current.moveLayer(l.id);
-                    console.log(`[bringDrawLayers] moveLayer OK: ${l.id}`);
                 }
             } catch (e) {
                 console.error(`[bringDrawLayers] ERRO ao mover ${l.id}:`, e);
@@ -210,6 +209,11 @@ const MapViwer = () => {
         });
         mapRef.current = theBaseMap;
 
+        // 🔬 DIAGNÓSTICO: verificar se os cliques chegam ao mapa
+        theBaseMap.on('click', (e) => {
+            console.log('[MAP CLICK] Clique no mapa em:', e.lngLat.lng, e.lngLat.lat);
+        });
+
         theBaseMap.on("load", () => {
             console.log('[MAP] Evento load disparado');
             setIsReady(true);
@@ -219,18 +223,20 @@ const MapViwer = () => {
                     adapter: new TerraDrawMapLibreGLAdapter({ map: theBaseMap as any }),
                     modes: [
                         new TerraDrawPolygonMode({
+                            // 🔬 CORES DE TESTE: magenta neon + amarelo puro
                             styles: {
-                                fillColor: '#1976D2', fillOpacity: 0.3, outlineColor: '#1976D2', outlineWidth: 3, outlineOpacity: 1,
-                                closingPointColor: '#FFFFFF', closingPointWidth: 8, closingPointOutlineColor: '#1976D2', closingPointOutlineWidth: 3,
-                                coordinatePointColor: '#FFFFFF', coordinatePointWidth: 8, coordinatePointOutlineColor: '#1976D2', coordinatePointOutlineWidth: 3,
-                                editedPointColor: '#FFFFFF', editedPointWidth: 8, editedPointOutlineColor: '#1976D2', editedPointOutlineWidth: 3
+                                fillColor: '#FF00FF', fillOpacity: 0.8,
+                                outlineColor: '#FFFF00', outlineWidth: 6, outlineOpacity: 1,
+                                closingPointColor: '#FFFF00', closingPointWidth: 12, closingPointOutlineColor: '#FF00FF', closingPointOutlineWidth: 4,
+                                coordinatePointColor: '#FFFF00', coordinatePointWidth: 12, coordinatePointOutlineColor: '#FF00FF', coordinatePointOutlineWidth: 4,
+                                editedPointColor: '#FFFF00', editedPointWidth: 12, editedPointOutlineColor: '#FF00FF', editedPointOutlineWidth: 4
                             }
                         } as any),
                         new TerraDrawSelectMode({
                             flags: { polygon: { feature: { draggable: true, coordinates: { midpoints: true, draggable: true, deletable: true } } } },
                             styles: {
-                                selectedPolygonColor: '#1976D2', selectedPolygonFillOpacity: 0.35, selectedPolygonOutlineColor: '#1976D2', selectedPolygonOutlineWidth: 3,
-                                selectionPointColor: '#FFFFFF', selectionPointWidth: 8, selectionPointOutlineColor: '#1976D2', selectionPointOutlineWidth: 3
+                                selectedPolygonColor: '#FF00FF', selectedPolygonFillOpacity: 0.8, selectedPolygonOutlineColor: '#FFFF00', selectedPolygonOutlineWidth: 6,
+                                selectionPointColor: '#FFFF00', selectionPointWidth: 12, selectionPointOutlineColor: '#FF00FF', selectionPointOutlineWidth: 4
                             }
                         } as any)
                     ]
@@ -260,17 +266,42 @@ const MapViwer = () => {
                     setTimeout(() => bringDrawLayersToFront(), 50);
                     setTimeout(() => bringDrawLayersToFront(), 200);
                 });
-
                 draw.on('change', () => {
                     bringDrawLayersToFront();
                     try {
+                        const snapshot: any[] = draw.getSnapshot();
+                        console.log('🔍 [CHANGE] Features no snapshot:', snapshot.length, JSON.stringify(snapshot));
+
+                        const style = mapRef.current?.getStyle();
+                        if (style) {
+                            const tdLayers = style.layers.filter((l: any) => l.id.startsWith('td-'));
+                            tdLayers.forEach((l: any) => {
+                                console.log(`🔍 [LAYER] ${l.id}`, {
+                                    type: l.type,
+                                    source: l.source,
+                                    paint: l.paint,
+                                    layout: l.layout,
+                                    filter: l.filter,
+                                    minzoom: l.minzoom,
+                                    maxzoom: l.maxzoom,
+                                });
+                            });
+
+                            const polygonSource = mapRef.current?.getSource('td-polygon') as any;
+                            if (polygonSource) {
+                                const sourceData = polygonSource._data || (polygonSource.serialize ? polygonSource.serialize().data : null);
+                                console.log('🔍 [SOURCE td-polygon] data:', JSON.stringify(sourceData));
+                            }
+                        }
+
                         const mode = (draw as any).getMode ? (draw as any).getMode() : null;
                         if (mode === 'polygon') return;
-                        const snapshot: any[] = draw.getSnapshot();
                         if (snapshot.length === 0) return;
                         const poly = snapshot.find((f: any) => f.geometry && f.geometry.type === 'Polygon');
                         if (poly) setSpatialFilter(poly.geometry);
-                    } catch (e) { }
+                    } catch (e) {
+                        console.error('🔍 [CHANGE] ERRO:', e);
+                    }
                 });
             } catch (e) {
                 console.error('[TERRADRAW] ❌ ERRO FATAL:', e);
