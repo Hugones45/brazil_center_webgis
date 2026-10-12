@@ -72,12 +72,14 @@ const SATELLITE_STYLE: any = {
     ]
 };
 
+// IDs of the basemap layers that must stay at the very bottom.
 const BASEMAP_LAYER_IDS = new Set([
     'osm-light-layer',
     'osm-dark-layer',
     'esri-satellite-layer'
 ]);
 
+// Basemap source IDs (used to swap the basemap without touching other layers).
 const BASEMAP_SOURCE_IDS = ['osm-light', 'osm-dark', 'esri-satellite'];
 
 // ============================================================================
@@ -922,6 +924,10 @@ const BaseMap = () => {
     useEffect(() => { handleDrawUpdateRef.current = handleDrawUpdate; }, [handleDrawUpdate]);
     useEffect(() => { handleDrawDeleteRef.current = handleDrawDelete; }, [handleDrawDelete]);
 
+    // >>> FIX: only promote Terra Draw's own layers (prefixed "td-") to the
+    // very top so the polygon the user is drawing always stays ABOVE every
+    // WMS raster. The previous implementation promoted every non-basemap
+    // layer in iteration order, which pushed WMS layers above the drawing.
     const bringDrawLayersToFront = useCallback(() => {
         if (!mapRef.current) return;
         const style = mapRef.current.getStyle();
@@ -944,7 +950,7 @@ const BaseMap = () => {
 
         const theBaseMap = new maplibregl.Map({
             container: mapContainerRef.current,
-            center: [-53.5, -18.5],
+            center: [-53.5, -18.5],   // Centro geográfico do Brasil
             zoom: 3.5,
             style: SATELLITE_STYLE
         });
@@ -962,25 +968,25 @@ const BaseMap = () => {
                     modes: [
                         new TerraDrawPolygonMode({
                             styles: {
-                                fillColor: '#2563EB',
+                                fillColor: '#EC6A2B',
                                 fillOpacity: 0.3,
-                                outlineColor: '#2563EB',
+                                outlineColor: '#EC6A2B',
                                 outlineWidth: 3,
                                 outlineOpacity: 1,
 
                                 closingPointColor: '#FFFFFF',
                                 closingPointWidth: 8,
-                                closingPointOutlineColor: '#2563EB',
+                                closingPointOutlineColor: '#EC6A2B',
                                 closingPointOutlineWidth: 3,
 
                                 coordinatePointColor: '#FFFFFF',
                                 coordinatePointWidth: 8,
-                                coordinatePointOutlineColor: '#2563EB',
+                                coordinatePointOutlineColor: '#EC6A2B',
                                 coordinatePointOutlineWidth: 3,
 
                                 editedPointColor: '#FFFFFF',
                                 editedPointWidth: 8,
-                                editedPointOutlineColor: '#2563EB',
+                                editedPointOutlineColor: '#EC6A2B',
                                 editedPointOutlineWidth: 3
                             }
                         } as any),
@@ -998,14 +1004,14 @@ const BaseMap = () => {
                                 }
                             },
                             styles: {
-                                selectedPolygonColor: '#2563EB',
+                                selectedPolygonColor: '#EC6A2B',
                                 selectedPolygonFillOpacity: 0.35,
-                                selectedPolygonOutlineColor: '#2563EB',
+                                selectedPolygonOutlineColor: '#EC6A2B',
                                 selectedPolygonOutlineWidth: 3,
 
                                 selectionPointColor: '#FFFFFF',
                                 selectionPointWidth: 8,
-                                selectionPointOutlineColor: '#2563EB',
+                                selectionPointOutlineColor: '#EC6A2B',
                                 selectionPointOutlineWidth: 3
                             }
                         } as any)
@@ -1464,10 +1470,15 @@ const BaseMap = () => {
         if (bbox) fitMapToBBox(bbox);
     };
 
+    // ========================================================================
+    // switchBasemap: only swaps the basemap raster source/layer by ID.
+    // Terra Draw, WMS layers, and the drawn polygon are NEVER touched.
+    // ========================================================================
     const switchBasemap = (type: 'light' | 'dark' | 'satellite') => {
         if (!mapRef.current) return;
         const map = mapRef.current;
 
+        // 1) Remove any existing basemap layers
         const styleLayers = map.getStyle()?.layers || [];
         styleLayers.forEach((l: any) => {
             if (l && BASEMAP_LAYER_IDS.has(l.id)) {
@@ -1475,12 +1486,14 @@ const BaseMap = () => {
             }
         });
 
+        // 2) Remove any existing basemap sources
         BASEMAP_SOURCE_IDS.forEach(id => {
             if (map.getSource(id)) {
                 try { map.removeSource(id); } catch (e) { }
             }
         });
 
+        // 3) Add the new basemap source + layer at the very bottom
         const styles: Record<string, any> = {
             light: LIGHT_STYLE,
             dark: DARK_STYLE,
@@ -1506,6 +1519,7 @@ const BaseMap = () => {
 
         setActiveBasemap(type);
 
+        // Keep Terra Draw layers on top just to be safe.
         setTimeout(() => bringDrawLayersToFront(), 50);
         setTimeout(() => bringDrawLayersToFront(), 200);
     };
@@ -2204,13 +2218,13 @@ const BaseMap = () => {
                 width: 28,
                 height: 28,
                 border: '3px solid #F0F0F0',
-                borderTop: '3px solid #2563EB',
+                borderTop: '3px solid #EC6A2B',
                 borderRadius: '50%'
             }} />
             <div style={{
                 fontSize: 13,
                 fontWeight: 'bold',
-                color: '#2563EB',
+                color: '#EC6A2B',
                 letterSpacing: '-0.2px'
             }}>
                 Download em progresso...
@@ -2370,7 +2384,7 @@ const BaseMap = () => {
                                                     padding: '8px 10px',
                                                     cursor: 'pointer',
                                                     fontSize: 12,
-                                                    backgroundColor: selectedServer.label === server.label ? '#EFF6FF' : 'white',
+                                                    backgroundColor: selectedServer.label === server.label ? '#FFF5F0' : 'white',
                                                     borderBottom: '1px solid #F0F0F0'
                                                 }}
                                                 onMouseEnter={(e) => {
@@ -2378,7 +2392,7 @@ const BaseMap = () => {
                                                 }}
                                                 onMouseLeave={(e) => {
                                                     (e.target as HTMLElement).style.backgroundColor =
-                                                        selectedServer.label === server.label ? '#EFF6FF' : 'white';
+                                                        selectedServer.label === server.label ? '#FFF5F0' : 'white';
                                                 }}
                                             >
                                                 <div style={{ fontWeight: 500, color: '#3B3B3B' }}>{server.label}</div>
@@ -2446,7 +2460,7 @@ const BaseMap = () => {
                                             style={{
                                                 width: '100%',
                                                 padding: '8px',
-                                                backgroundColor: '#2563EB',
+                                                backgroundColor: '#EC6A2B',
                                                 color: 'white',
                                                 border: 'none',
                                                 borderRadius: 4,
@@ -2500,9 +2514,9 @@ const BaseMap = () => {
                                                         flex: 1,
                                                         padding: '6px 4px',
                                                         fontSize: 11,
-                                                        backgroundColor: activeBasemap === 'satellite' ? '#2563EB' : 'white',
+                                                        backgroundColor: activeBasemap === 'satellite' ? '#EC6A2B' : 'white',
                                                         color: activeBasemap === 'satellite' ? 'white' : '#3B3B3B',
-                                                        border: '1px solid ' + (activeBasemap === 'satellite' ? '#2563EB' : '#E0E0E0'),
+                                                        border: '1px solid ' + (activeBasemap === 'satellite' ? '#EC6A2B' : '#E0E0E0'),
                                                         borderRadius: 4,
                                                         cursor: 'pointer',
                                                         fontWeight: 'bold'
@@ -2516,9 +2530,9 @@ const BaseMap = () => {
                                                         flex: 1,
                                                         padding: '6px 4px',
                                                         fontSize: 11,
-                                                        backgroundColor: activeBasemap === 'light' ? '#2563EB' : 'white',
+                                                        backgroundColor: activeBasemap === 'light' ? '#EC6A2B' : 'white',
                                                         color: activeBasemap === 'light' ? 'white' : '#3B3B3B',
-                                                        border: '1px solid ' + (activeBasemap === 'light' ? '#2563EB' : '#E0E0E0'),
+                                                        border: '1px solid ' + (activeBasemap === 'light' ? '#EC6A2B' : '#E0E0E0'),
                                                         borderRadius: 4,
                                                         cursor: 'pointer',
                                                         fontWeight: 'bold'
@@ -2554,7 +2568,7 @@ const BaseMap = () => {
                         left: 10,
                         zIndex: 1000,
                         padding: '10px 20px',
-                        backgroundColor: '#2563EB',
+                        backgroundColor: '#EC6A2B',
                         color: 'white',
                         border: 'none',
                         borderRadius: 8,
@@ -2602,8 +2616,8 @@ const BaseMap = () => {
                                     cursor: 'pointer',
                                     fontSize: 13,
                                     fontWeight: activeTab === 'all' ? 'bold' : 'normal',
-                                    color: activeTab === 'all' ? '#2563EB' : '#666',
-                                    borderBottom: activeTab === 'all' ? '3px solid #2563EB' : '3px solid transparent',
+                                    color: activeTab === 'all' ? '#EC6A2B' : '#666',
+                                    borderBottom: activeTab === 'all' ? '3px solid #EC6A2B' : '3px solid transparent',
                                     transition: 'all 0.2s',
                                     marginBottom: '-2px'
                                 }}
@@ -2620,8 +2634,8 @@ const BaseMap = () => {
                                     cursor: 'pointer',
                                     fontSize: 13,
                                     fontWeight: activeTab === 'selected' ? 'bold' : 'normal',
-                                    color: activeTab === 'selected' ? '#2563EB' : '#666',
-                                    borderBottom: activeTab === 'selected' ? '3px solid #2563EB' : '3px solid transparent',
+                                    color: activeTab === 'selected' ? '#EC6A2B' : '#666',
+                                    borderBottom: activeTab === 'selected' ? '3px solid #EC6A2B' : '3px solid transparent',
                                     transition: 'all 0.2s',
                                     marginBottom: '-2px',
                                     position: 'relative'
@@ -2633,7 +2647,7 @@ const BaseMap = () => {
                                         position: 'absolute',
                                         top: '6px',
                                         right: '8px',
-                                        backgroundColor: '#2563EB',
+                                        backgroundColor: '#EC6A2B',
                                         color: 'white',
                                         borderRadius: '50%',
                                         width: '20px',
@@ -2670,7 +2684,7 @@ const BaseMap = () => {
                             <>
                                 <div style={{
                                     padding: '10px 15px',
-                                    backgroundColor: spatialFilter ? '#EFF6FF' : '#fff',
+                                    backgroundColor: spatialFilter ? '#FFF5F0' : '#fff',
                                     borderBottom: '1px solid #F0F0F0'
                                 }}>
                                     <div style={{
@@ -2703,7 +2717,7 @@ const BaseMap = () => {
                                             style={{
                                                 padding: '6px 12px',
                                                 fontSize: 11,
-                                                backgroundColor: drawingEnabled ? '#991B1B' : '#2563EB',
+                                                backgroundColor: drawingEnabled ? '#D64A12' : '#EC6A2B',
                                                 color: 'white',
                                                 border: 'none',
                                                 borderRadius: 4,
@@ -2712,7 +2726,7 @@ const BaseMap = () => {
                                                 flex: 1,
                                             }}
                                         >
-                                            {drawingEnabled ? '⏹️ Parar Desenho' : '✏️ Desenhar Área de Interesse'}
+                                            {drawingEnabled ? '#D64A12 Parar Desenho' : '✏️ Desenhar Área de Interesse'}
                                         </button>
                                     </div>
 
@@ -2720,11 +2734,11 @@ const BaseMap = () => {
                                         <div style={{ marginTop: 8 }}>
                                             <div style={{
                                                 fontSize: 11,
-                                                color: '#1E40AF',
+                                                color: '#D64A12',
                                                 fontWeight: 'bold',
                                                 marginBottom: 8,
                                                 textAlign: 'center',
-                                                backgroundColor: '#EFF6FF',
+                                                backgroundColor: '#FFF5F0',
                                                 padding: '4px',
                                                 borderRadius: 3
                                             }}>
@@ -2758,7 +2772,7 @@ const BaseMap = () => {
                                                         flex: 1,
                                                         padding: '4px',
                                                         fontSize: 10,
-                                                        backgroundColor: '#991B1B',
+                                                        backgroundColor: '#EF5350',
                                                         color: 'white',
                                                         border: 'none',
                                                         borderRadius: 3,
@@ -2773,11 +2787,11 @@ const BaseMap = () => {
                                 </div>
 
                                 {activeLayers.size > 0 && spatialFilter && (
-                                    <div style={{ padding: '10px', backgroundColor: '#EFF6FF' }}>
+                                    <div style={{ padding: '10px', backgroundColor: '#FFF5F0' }}>
                                         <div style={{
                                             fontSize: 12,
                                             fontWeight: 'bold',
-                                            color: '#1E40AF',
+                                            color: '#D64A12',
                                             marginBottom: 8,
                                             textAlign: 'center'
                                         }}>
@@ -2789,7 +2803,7 @@ const BaseMap = () => {
                                                 backgroundColor: 'white',
                                                 marginBottom: 5,
                                                 borderRadius: 4,
-                                                border: '2px solid #2563EB'
+                                                border: '2px solid #EC6A2B'
                                             }}>
                                                 <div style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 5, color: '#3B3B3B' }}>
                                                     {layer.title}
@@ -2804,7 +2818,7 @@ const BaseMap = () => {
                                                         style={{
                                                             padding: '4px 8px',
                                                             fontSize: 9,
-                                                            backgroundColor: '#2563EB',
+                                                            backgroundColor: '#EC6A2B',
                                                             color: 'white',
                                                             border: 'none',
                                                             borderRadius: 3,
@@ -2824,7 +2838,7 @@ const BaseMap = () => {
                                                         style={{
                                                             padding: '4px 8px',
                                                             fontSize: 9,
-                                                            backgroundColor: '#0D9488',
+                                                            backgroundColor: '#D64A12',
                                                             color: 'white',
                                                             border: 'none',
                                                             borderRadius: 3,
@@ -2844,7 +2858,7 @@ const BaseMap = () => {
                                                         style={{
                                                             padding: '4px 8px',
                                                             fontSize: 9,
-                                                            backgroundColor: '#D97706',
+                                                            backgroundColor: '#FF9800',
                                                             color: 'white',
                                                             border: 'none',
                                                             borderRadius: 3,
@@ -2864,7 +2878,7 @@ const BaseMap = () => {
                                                         style={{
                                                             padding: '4px 8px',
                                                             fontSize: 9,
-                                                            backgroundColor: '#991B1B',
+                                                            backgroundColor: '#E91E63',
                                                             color: 'white',
                                                             border: 'none',
                                                             borderRadius: 3,
@@ -2894,7 +2908,7 @@ const BaseMap = () => {
                                             style={{
                                                 padding: '4px 12px',
                                                 fontSize: 11,
-                                                backgroundColor: '#991B1B',
+                                                backgroundColor: '#EF5350',
                                                 color: 'white',
                                                 border: 'none',
                                                 borderRadius: 4,
@@ -2909,7 +2923,7 @@ const BaseMap = () => {
                                             style={{
                                                 padding: '4px 12px',
                                                 fontSize: 11,
-                                                backgroundColor: '#15803D',
+                                                backgroundColor: '#2196F3',
                                                 color: 'white',
                                                 border: 'none',
                                                 borderRadius: 4,
@@ -2988,12 +3002,12 @@ const BaseMap = () => {
 
                                 {error && (
                                     <div style={{ padding: '10px' }}>
-                                        <div style={{ color: '#991B1B', marginBottom: 10, fontSize: 13 }}>{error}</div>
+                                        <div style={{ color: '#EF5350', marginBottom: 10, fontSize: 13 }}>{error}</div>
                                         <button
                                             onClick={() => fetchLayers(baseUrl)}
                                             style={{
                                                 padding: '8px 15px',
-                                                backgroundColor: '#2563EB',
+                                                backgroundColor: '#EC6A2B',
                                                 color: 'white',
                                                 border: 'none',
                                                 borderRadius: 4,
@@ -3015,8 +3029,8 @@ const BaseMap = () => {
                                                     padding: '10px',
                                                     margin: '5px 0',
                                                     borderRadius: 6,
-                                                    backgroundColor: activeLayers.has(layer.name) ? '#EFF6FF' : '#F8F8F8',
-                                                    border: activeLayers.has(layer.name) ? '2px solid #2563EB' : '1px solid transparent',
+                                                    backgroundColor: activeLayers.has(layer.name) ? '#FFF5F0' : '#F8F8F8',
+                                                    border: activeLayers.has(layer.name) ? '2px solid #EC6A2B' : '1px solid transparent',
                                                     transition: 'all 0.2s'
                                                 }}
                                             >
@@ -3034,7 +3048,7 @@ const BaseMap = () => {
                                                                     dangerouslySetInnerHTML={{
                                                                         __html: layer.title.replace(
                                                                             new RegExp(`(${layerSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
-                                                                            '<mark style="background-color: #EFF6FF; padding: 0 2px;">$1</mark>'
+                                                                            '<mark style="background-color: #FFF5F0; padding: 0 2px;">$1</mark>'
                                                                         )
                                                                     }}
                                                                 />
@@ -3056,7 +3070,7 @@ const BaseMap = () => {
                                                         style={{
                                                             padding: '4px 10px',
                                                             fontSize: 10,
-                                                            backgroundColor: '#1E3A8A',
+                                                            backgroundColor: '#9C27B0',
                                                             color: 'white',
                                                             border: 'none',
                                                             borderRadius: 3,
@@ -3072,7 +3086,7 @@ const BaseMap = () => {
                                                         style={{
                                                             padding: '4px 10px',
                                                             fontSize: 10,
-                                                            backgroundColor: '#2563EB',
+                                                            backgroundColor: '#EC6A2B',
                                                             color: 'white',
                                                             border: 'none',
                                                             borderRadius: 3,
@@ -3088,7 +3102,7 @@ const BaseMap = () => {
                                                         style={{
                                                             padding: '4px 10px',
                                                             fontSize: 10,
-                                                            backgroundColor: '#0D9488',
+                                                            backgroundColor: '#D64A12',
                                                             color: 'white',
                                                             border: 'none',
                                                             borderRadius: 3,
@@ -3104,7 +3118,7 @@ const BaseMap = () => {
                                                         style={{
                                                             padding: '4px 10px',
                                                             fontSize: 10,
-                                                            backgroundColor: '#D97706',
+                                                            backgroundColor: '#FF9800',
                                                             color: 'white',
                                                             border: 'none',
                                                             borderRadius: 3,
@@ -3120,7 +3134,7 @@ const BaseMap = () => {
                                                         style={{
                                                             padding: '4px 10px',
                                                             fontSize: 10,
-                                                            backgroundColor: '#991B1B',
+                                                            backgroundColor: '#E91E63',
                                                             color: 'white',
                                                             border: 'none',
                                                             borderRadius: 3,
@@ -3162,8 +3176,8 @@ const BaseMap = () => {
                                                             padding: '12px',
                                                             margin: '5px 0',
                                                             borderRadius: 6,
-                                                            backgroundColor: '#EFF6FF',
-                                                            border: '2px solid #2563EB',
+                                                            backgroundColor: '#FFF5F0',
+                                                            border: '2px solid #EC6A2B',
                                                             transition: 'all 0.2s'
                                                         }}
                                                     >
@@ -3172,7 +3186,7 @@ const BaseMap = () => {
                                                                 width: 6,
                                                                 height: 6,
                                                                 borderRadius: '50%',
-                                                                backgroundColor: '#2563EB',
+                                                                backgroundColor: '#EC6A2B',
                                                                 flexShrink: 0
                                                             }} />
                                                             <div style={{ flex: 1 }}>
@@ -3182,7 +3196,7 @@ const BaseMap = () => {
                                                                             dangerouslySetInnerHTML={{
                                                                                 __html: layer.title.replace(
                                                                                     new RegExp(`(${layerSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
-                                                                                    '<mark style="background-color: #EFF6FF; padding: 0 2px;">$1</mark>'
+                                                                                    '<mark style="background-color: #FFF5F0; padding: 0 2px;">$1</mark>'
                                                                                 )
                                                                             }}
                                                                         />
@@ -3204,7 +3218,7 @@ const BaseMap = () => {
                                                                 style={{
                                                                     padding: '4px 12px',
                                                                     fontSize: 10,
-                                                                    backgroundColor: '#991B1B',
+                                                                    backgroundColor: '#EF5350',
                                                                     color: 'white',
                                                                     border: 'none',
                                                                     borderRadius: 3,
@@ -3223,7 +3237,7 @@ const BaseMap = () => {
                                                                 style={{
                                                                     padding: '4px 10px',
                                                                     fontSize: 10,
-                                                                    backgroundColor: '#1E3A8A',
+                                                                    backgroundColor: '#9C27B0',
                                                                     color: 'white',
                                                                     border: 'none',
                                                                     borderRadius: 3,
@@ -3238,7 +3252,7 @@ const BaseMap = () => {
                                                                 style={{
                                                                     padding: '4px 10px',
                                                                     fontSize: 10,
-                                                                    backgroundColor: '#15803D',
+                                                                    backgroundColor: '#2196F3',
                                                                     color: 'white',
                                                                     border: 'none',
                                                                     borderRadius: 3,
@@ -3255,7 +3269,7 @@ const BaseMap = () => {
                                                                 style={{
                                                                     padding: '4px 10px',
                                                                     fontSize: 10,
-                                                                    backgroundColor: '#2563EB',
+                                                                    backgroundColor: '#EC6A2B',
                                                                     color: 'white',
                                                                     border: 'none',
                                                                     borderRadius: 3,
@@ -3271,7 +3285,7 @@ const BaseMap = () => {
                                                                 style={{
                                                                     padding: '4px 10px',
                                                                     fontSize: 10,
-                                                                    backgroundColor: '#0D9488',
+                                                                    backgroundColor: '#D64A12',
                                                                     color: 'white',
                                                                     border: 'none',
                                                                     borderRadius: 3,
@@ -3287,7 +3301,7 @@ const BaseMap = () => {
                                                                 style={{
                                                                     padding: '4px 10px',
                                                                     fontSize: 10,
-                                                                    backgroundColor: '#D97706',
+                                                                    backgroundColor: '#FF9800',
                                                                     color: 'white',
                                                                     border: 'none',
                                                                     borderRadius: 3,
@@ -3303,7 +3317,7 @@ const BaseMap = () => {
                                                                 style={{
                                                                     padding: '4px 10px',
                                                                     fontSize: 10,
-                                                                    backgroundColor: '#991B1B',
+                                                                    backgroundColor: '#E91E63',
                                                                     color: 'white',
                                                                     border: 'none',
                                                                     borderRadius: 3,
@@ -3344,7 +3358,7 @@ const BaseMap = () => {
                         right: 0,
                         height: `${tableHeight}vh`,
                         backgroundColor: 'white',
-                        borderTop: '3px solid #2563EB',
+                        borderTop: '3px solid #EC6A2B',
                         boxShadow: '0 -8px 30px rgba(0,0,0,0.2)',
                         zIndex: 9999,
                         display: 'flex',
@@ -3377,7 +3391,7 @@ const BaseMap = () => {
                             transition: 'background-color 0.2s'
                         }}
                             onMouseEnter={(e) => {
-                                (e.target as HTMLElement).style.backgroundColor = '#2563EB';
+                                (e.target as HTMLElement).style.backgroundColor = '#EC6A2B';
                             }}
                             onMouseLeave={(e) => {
                                 (e.target as HTMLElement).style.backgroundColor = '#bbb';
@@ -3404,7 +3418,7 @@ const BaseMap = () => {
                             <div style={{
                                 fontSize: 12,
                                 color: '#666',
-                                backgroundColor: '#EFF6FF',
+                                backgroundColor: '#FFF5F0',
                                 padding: '2px 10px',
                                 borderRadius: 10
                             }}>
@@ -3413,8 +3427,8 @@ const BaseMap = () => {
                             {spatialFilter && (
                                 <div style={{
                                     fontSize: 11,
-                                    color: '#1E40AF',
-                                    backgroundColor: '#EFF6FF',
+                                    color: '#D64A12',
+                                    backgroundColor: '#FFF5F0',
                                     padding: '2px 10px',
                                     borderRadius: 10,
                                     fontWeight: 'bold'
@@ -3467,7 +3481,7 @@ const BaseMap = () => {
                                     style={{
                                         padding: '4px 6px',
                                         fontSize: 11,
-                                        backgroundColor: currentPage === 0 ? '#E0E0E0' : '#2563EB',
+                                        backgroundColor: currentPage === 0 ? '#E0E0E0' : '#EC6A2B',
                                         color: 'white',
                                         border: 'none',
                                         borderRadius: 3,
@@ -3484,7 +3498,7 @@ const BaseMap = () => {
                                     style={{
                                         padding: '4px 6px',
                                         fontSize: 11,
-                                        backgroundColor: currentPage === 0 ? '#E0E0E0' : '#2563EB',
+                                        backgroundColor: currentPage === 0 ? '#E0E0E0' : '#EC6A2B',
                                         color: 'white',
                                         border: 'none',
                                         borderRadius: 3,
@@ -3511,11 +3525,11 @@ const BaseMap = () => {
                                         width: '40px',
                                         padding: '3px 4px',
                                         fontSize: 11,
-                                        border: '1px solid #2563EB',
+                                        border: '1px solid #EC6A2B',
                                         borderRadius: 3,
                                         textAlign: 'center',
                                         fontWeight: 'bold',
-                                        color: '#2563EB'
+                                        color: '#EC6A2B'
                                     }}
                                 />
 
@@ -3526,7 +3540,7 @@ const BaseMap = () => {
                                     style={{
                                         padding: '4px 6px',
                                         fontSize: 11,
-                                        backgroundColor: currentPage >= totalPages - 1 ? '#E0E0E0' : '#2563EB',
+                                        backgroundColor: currentPage >= totalPages - 1 ? '#E0E0E0' : '#EC6A2B',
                                         color: 'white',
                                         border: 'none',
                                         borderRadius: 3,
@@ -3543,7 +3557,7 @@ const BaseMap = () => {
                                     style={{
                                         padding: '4px 6px',
                                         fontSize: 11,
-                                        backgroundColor: currentPage >= totalPages - 1 ? '#E0E0E0' : '#2563EB',
+                                        backgroundColor: currentPage >= totalPages - 1 ? '#E0E0E0' : '#EC6A2B',
                                         color: 'white',
                                         border: 'none',
                                         borderRadius: 3,
@@ -3563,7 +3577,7 @@ const BaseMap = () => {
                                 style={{
                                     padding: '6px 15px',
                                     fontSize: 12,
-                                    backgroundColor: '#991B1B',
+                                    backgroundColor: '#EF5350',
                                     color: 'white',
                                     border: 'none',
                                     borderRadius: 4,
@@ -3601,7 +3615,7 @@ const BaseMap = () => {
                                 justifyContent: 'center',
                                 alignItems: 'center',
                                 height: '100%',
-                                color: '#991B1B',
+                                color: '#EF5350',
                                 fontSize: 14
                             }}>
                                 {tableError}
@@ -3628,8 +3642,8 @@ const BaseMap = () => {
                                         }}>
                                             <th style={{
                                                 padding: '8px 12px',
-                                                borderBottom: '2px solid #2563EB',
-                                                backgroundColor: '#EFF6FF',
+                                                borderBottom: '2px solid #EC6A2B',
+                                                backgroundColor: '#FFF5F0',
                                                 textAlign: 'left',
                                                 fontWeight: 'bold',
                                                 color: '#3B3B3B',
@@ -3643,8 +3657,8 @@ const BaseMap = () => {
                                             {tableColumns.map(column => (
                                                 <th key={column} style={{
                                                     padding: '8px 12px',
-                                                    borderBottom: '2px solid #2563EB',
-                                                    backgroundColor: '#EFF6FF',
+                                                    borderBottom: '2px solid #EC6A2B',
+                                                    backgroundColor: '#FFF5F0',
                                                     textAlign: 'left',
                                                     fontWeight: 'bold',
                                                     color: '#3B3B3B',
@@ -3665,7 +3679,7 @@ const BaseMap = () => {
                                                     borderBottom: '1px solid #F0F0F0'
                                                 }}
                                                 onMouseEnter={(e) => {
-                                                    (e.currentTarget as HTMLElement).style.backgroundColor = '#EFF6FF';
+                                                    (e.currentTarget as HTMLElement).style.backgroundColor = '#FFF5F0';
                                                 }}
                                                 onMouseLeave={(e) => {
                                                     (e.currentTarget as HTMLElement).style.backgroundColor = index % 2 === 0 ? 'white' : '#FAFAFA';
