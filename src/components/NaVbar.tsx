@@ -31,7 +31,6 @@ const Navbar = () => {
                             gap: "8px", // Reduced gap between icon and text
                             padding: "0 16px",
                             boxSizing: "border-box",
-
                             color: isActive
                                 ? "#EC6A2B"
                                 : "#666666",
