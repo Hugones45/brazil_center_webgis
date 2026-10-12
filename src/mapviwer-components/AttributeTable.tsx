@@ -1,6 +1,3 @@
-// src/mapviwer-components/AttributeTable.tsx
-import { useRef } from 'react';
-
 interface AttributeTableProps {
     showTable: boolean;
     selectedLayerForTable: string | null;
