@@ -205,17 +205,17 @@ const MapViwer = () => {
                     modes: [
                         new TerraDrawPolygonMode({
                             styles: {
-                                fillColor: '#EC6A2B', fillOpacity: 0.3, outlineColor: '#EC6A2B', outlineWidth: 3, outlineOpacity: 1,
-                                closingPointColor: '#FFFFFF', closingPointWidth: 8, closingPointOutlineColor: '#EC6A2B', closingPointOutlineWidth: 3,
-                                coordinatePointColor: '#FFFFFF', coordinatePointWidth: 8, coordinatePointOutlineColor: '#EC6A2B', coordinatePointOutlineWidth: 3,
-                                editedPointColor: '#FFFFFF', editedPointWidth: 8, editedPointOutlineColor: '#EC6A2B', editedPointOutlineWidth: 3
+                                fillColor: '#1976D2', fillOpacity: 0.3, outlineColor: '#1976D2', outlineWidth: 3, outlineOpacity: 1,
+                                closingPointColor: '#FFFFFF', closingPointWidth: 8, closingPointOutlineColor: '#1976D2', closingPointOutlineWidth: 3,
+                                coordinatePointColor: '#FFFFFF', coordinatePointWidth: 8, coordinatePointOutlineColor: '#1976D2', coordinatePointOutlineWidth: 3,
+                                editedPointColor: '#FFFFFF', editedPointWidth: 8, editedPointOutlineColor: '#1976D2', editedPointOutlineWidth: 3
                             }
                         } as any),
                         new TerraDrawSelectMode({
                             flags: { polygon: { feature: { draggable: true, coordinates: { midpoints: true, draggable: true, deletable: true } } } },
                             styles: {
-                                selectedPolygonColor: '#EC6A2B', selectedPolygonFillOpacity: 0.35, selectedPolygonOutlineColor: '#EC6A2B', selectedPolygonOutlineWidth: 3,
-                                selectionPointColor: '#FFFFFF', selectionPointWidth: 8, selectionPointOutlineColor: '#EC6A2B', selectionPointOutlineWidth: 3
+                                selectedPolygonColor: '#1976D2', selectedPolygonFillOpacity: 0.35, selectedPolygonOutlineColor: '#1976D2', selectedPolygonOutlineWidth: 3,
+                                selectionPointColor: '#FFFFFF', selectionPointWidth: 8, selectionPointOutlineColor: '#1976D2', selectionPointOutlineWidth: 3
                             }
                         } as any)
                     ]
@@ -580,8 +580,8 @@ const MapViwer = () => {
 
     const downloadOverlay = downloadingLayer ? (
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255, 255, 255, 0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 9999, borderRadius: 8, gap: 10, pointerEvents: 'auto', cursor: 'wait' }}>
-            <div style={{ width: 28, height: 28, border: '3px solid #F0F0F0', borderTop: '3px solid #EC6A2B', borderRadius: '50%' }} />
-            <div style={{ fontSize: 13, fontWeight: 'bold', color: '#EC6A2B', letterSpacing: '-0.2px' }}>Download em progresso...</div>
+            <div style={{ width: 28, height: 28, border: '3px solid #F0F0F0', borderTop: '3px solid #1976D2', borderRadius: '50%' }} />
+            <div style={{ fontSize: 13, fontWeight: 'bold', color: '#1976D2', letterSpacing: '-0.2px' }}>Download em progresso...</div>
         </div>
     ) : null;
 

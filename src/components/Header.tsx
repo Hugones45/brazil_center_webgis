@@ -48,7 +48,7 @@ const Header = () => {
                         style={{
                             margin: "3px 0 0",
                             fontSize: "11px",
-                            color: "#EC6A2B",
+                            color: "#1E40AF",
                             fontWeight: 500,
                             letterSpacing: "0.5px",
                             textTransform: "uppercase",
@@ -86,8 +86,8 @@ const Header = () => {
                             width: "8px",
                             height: "8px",
                             borderRadius: "50%",
-                            backgroundColor: "#EC6A2B",
-                            boxShadow: "0 0 8px rgba(236, 106, 43, 0.35)",
+                            backgroundColor: "#15803D",
+                            boxShadow: "0 0 8px rgba(21, 128, 61, 0.35)",
                             display: "inline-block",
                         }}
                     />
@@ -99,9 +99,9 @@ const Header = () => {
                     style={{
                         padding: "5px 10px",
                         borderRadius: "4px",
-                        backgroundColor: "rgba(236, 106, 43, 0.08)",
-                        border: "1px solid rgba(236, 106, 43, 0.15)",
-                        color: "#EC6A2B",
+                        backgroundColor: "rgba(30, 64, 175, 0.08)",
+                        border: "1px solid rgba(30, 64, 175, 0.15)",
+                        color: "#1E40AF",
                         fontSize: "10px",
                         fontWeight: 700,
                         letterSpacing: "0.5px",
@@ -111,7 +111,7 @@ const Header = () => {
                 </span>
             </div>
 
-            {/* Subtle orange accent */}
+            {/* Subtle blue-green accent */}
             <div
                 style={{
                     position: "absolute",
@@ -120,7 +120,7 @@ const Header = () => {
                     width: "100%",
                     height: "2px",
                     background:
-                        "linear-gradient(90deg, #EC6A2B 0%, #D64A12 45%, rgba(236, 106, 43, 0) 100%)",
+                        "linear-gradient(90deg, #1E40AF 0%, #15803D 45%, rgba(30, 64, 175, 0) 100%)",
                 }}
             />
         </header>
