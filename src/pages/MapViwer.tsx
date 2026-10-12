@@ -174,6 +174,7 @@ const MapViwer = () => {
     useEffect(() => { handleDrawUpdateRef.current = handleDrawUpdate; }, [handleDrawUpdate]);
     useEffect(() => { handleDrawDeleteRef.current = handleDrawDelete; }, [handleDrawDelete]);
 
+    // >>> FIX: Restaurado do BaseMap.tsx original — só promove camadas do TerraDraw ("td-")
     const bringDrawLayersToFront = useCallback(() => {
         if (!mapRef.current) return;
         const style = mapRef.current.getStyle();
@@ -222,6 +223,8 @@ const MapViwer = () => {
                 draw.start();
                 draw.setMode('select');
                 drawRef.current = draw;
+
+                // ✅ FIX #2: restaurado o par 50/200ms que existia no BaseMap.tsx
                 setTimeout(() => bringDrawLayersToFront(), 50);
                 setTimeout(() => bringDrawLayersToFront(), 200);
 
@@ -235,13 +238,18 @@ const MapViwer = () => {
                             else handleDrawCreateRef.current({ features: [asGeoJSONFeature as any] });
                             try { draw.setMode('select'); } catch (e) { }
                         }
-                    } catch (e) { }
+                    } catch (e) {
+                        console.warn('Erro no handler de finish:', e);
+                    }
+                    // ✅ FIX #3: restaurado o par 50/200ms pós-finish
                     setTimeout(() => bringDrawLayersToFront(), 50);
                     setTimeout(() => bringDrawLayersToFront(), 200);
                 });
 
+                // ✅ FIX #1 (O MAIS CRÍTICO): restaurado bringDrawLayersToFront() SÍNCRONO no change
                 draw.on('change', () => {
                     bringDrawLayersToFront();
+
                     try {
                         const mode = (draw as any).getMode ? (draw as any).getMode() : null;
                         if (mode === 'polygon') return;
@@ -251,7 +259,11 @@ const MapViwer = () => {
                         if (poly) setSpatialFilter(poly.geometry);
                     } catch (e) { }
                 });
-            } catch (e) { }
+            } catch (e) {
+                console.warn('Falha ao inicializar Terra Draw:', e);
+            }
+
+            // ✅ FIX #4: restaurado o setTimeout final fora do try/catch
             setTimeout(() => bringDrawLayersToFront(), 200);
         });
 
