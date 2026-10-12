@@ -72,14 +72,12 @@ const SATELLITE_STYLE: any = {
     ]
 };
 
-// IDs of the basemap layers that must stay at the very bottom.
 const BASEMAP_LAYER_IDS = new Set([
     'osm-light-layer',
     'osm-dark-layer',
     'esri-satellite-layer'
 ]);
 
-// Basemap source IDs (used to swap the basemap without touching other layers).
 const BASEMAP_SOURCE_IDS = ['osm-light', 'osm-dark', 'esri-satellite'];
 
 // ============================================================================
@@ -924,13 +922,14 @@ const BaseMap = () => {
     useEffect(() => { handleDrawUpdateRef.current = handleDrawUpdate; }, [handleDrawUpdate]);
     useEffect(() => { handleDrawDeleteRef.current = handleDrawDelete; }, [handleDrawDelete]);
 
-    // >>> FIX: only promote Terra Draw's own layers (prefixed "td-") to the
-    // very top so the polygon the user is drawing always stays ABOVE every
-    // WMS raster. The previous implementation promoted every non-basemap
-    // layer in iteration order, which pushed WMS layers above the drawing.
+    // Promotes Terra Draw's td-* layers to the top of the style. Called when
+    // Terra Draw changes, on finish, and after basemap/WMS layer changes.
+    // It does NOT touch sources, so there is no flicker.
     const bringDrawLayersToFront = useCallback(() => {
         if (!mapRef.current) return;
-        const style = mapRef.current.getStyle();
+        const map = mapRef.current;
+
+        const style = map.getStyle();
         if (!style || !style.layers) return;
 
         const ids = style.layers.map((l: any) => l.id as string);
@@ -938,10 +937,24 @@ const BaseMap = () => {
             if (typeof id !== 'string') return;
             if (!id.startsWith('td-')) return;
             try {
-                if (mapRef.current?.getLayer(id)) {
-                    mapRef.current.moveLayer(id);
+                if (map.getLayer(id)) {
+                    map.moveLayer(id);
                 }
             } catch (e) { }
+        });
+    }, []);
+
+    // One-shot nudge: re-emit current data on Terra Draw's GeoJSON sources so
+    // MapLibre's worker picks them up on the first render. Called only right
+    // after draw.start() and after a basemap switch. Never on change/finish.
+    const nudgeTdSourcesOnce = useCallback(() => {
+        if (!mapRef.current) return;
+        const map = mapRef.current;
+        ['td-polygon', 'td-linestring', 'td-point'].forEach((id) => {
+            const src: any = map.getSource(id);
+            if (src && src._data && typeof src.setData === 'function') {
+                try { src.setData(src._data); } catch (e) { }
+            }
         });
     }, []);
 
@@ -950,7 +963,7 @@ const BaseMap = () => {
 
         const theBaseMap = new maplibregl.Map({
             container: mapContainerRef.current,
-            center: [-53.5, -18.5],   // Centro geográfico do Brasil
+            center: [-53.5, -18.5],
             zoom: 3.5,
             style: SATELLITE_STYLE
         });
@@ -1022,8 +1035,14 @@ const BaseMap = () => {
                 draw.setMode('select');
                 drawRef.current = draw;
 
+                // One-time source nudge — flushes the initial empty sources
+                // into the worker so subsequent setData() from the adapter is
+                // not swallowed.
+                setTimeout(() => nudgeTdSourcesOnce(), 100);
+                setTimeout(() => nudgeTdSourcesOnce(), 400);
+
                 setTimeout(() => bringDrawLayersToFront(), 50);
-                setTimeout(() => bringDrawLayersToFront(), 200);
+                setTimeout(() => bringDrawLayersToFront(), 300);
 
                 draw.on('finish', (id: string | number) => {
                     try {
@@ -1045,11 +1064,13 @@ const BaseMap = () => {
                     } catch (e) {
                         console.warn('Erro no handler de finish:', e);
                     }
+                    // Only re-order layers — no source writes here.
                     setTimeout(() => bringDrawLayersToFront(), 50);
-                    setTimeout(() => bringDrawLayersToFront(), 200);
+                    setTimeout(() => bringDrawLayersToFront(), 250);
                 });
 
                 draw.on('change', () => {
+                    // Only re-order layers — no source writes here.
                     bringDrawLayersToFront();
 
                     try {
@@ -1470,15 +1491,10 @@ const BaseMap = () => {
         if (bbox) fitMapToBBox(bbox);
     };
 
-    // ========================================================================
-    // switchBasemap: only swaps the basemap raster source/layer by ID.
-    // Terra Draw, WMS layers, and the drawn polygon are NEVER touched.
-    // ========================================================================
     const switchBasemap = (type: 'light' | 'dark' | 'satellite') => {
         if (!mapRef.current) return;
         const map = mapRef.current;
 
-        // 1) Remove any existing basemap layers
         const styleLayers = map.getStyle()?.layers || [];
         styleLayers.forEach((l: any) => {
             if (l && BASEMAP_LAYER_IDS.has(l.id)) {
@@ -1486,14 +1502,12 @@ const BaseMap = () => {
             }
         });
 
-        // 2) Remove any existing basemap sources
         BASEMAP_SOURCE_IDS.forEach(id => {
             if (map.getSource(id)) {
                 try { map.removeSource(id); } catch (e) { }
             }
         });
 
-        // 3) Add the new basemap source + layer at the very bottom
         const styles: Record<string, any> = {
             light: LIGHT_STYLE,
             dark: DARK_STYLE,
@@ -1519,9 +1533,11 @@ const BaseMap = () => {
 
         setActiveBasemap(type);
 
-        // Keep Terra Draw layers on top just to be safe.
-        setTimeout(() => bringDrawLayersToFront(), 50);
-        setTimeout(() => bringDrawLayersToFront(), 200);
+        // Basemap swap can disturb the worker; one nudge is safe here.
+        setTimeout(() => {
+            nudgeTdSourcesOnce();
+            bringDrawLayersToFront();
+        }, 60);
     };
 
     const toggleLayer = (layerName: string) => {
