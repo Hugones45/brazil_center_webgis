@@ -414,8 +414,8 @@ const DataSource = () => {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     gap: '16px',
-                    // borderBottom: '2px solid #1976D2',
-                    // borderTop: '4px solid #1976D2',
+                    // borderBottom: '2px solid #EC6A2B',
+                    // borderTop: '4px solid #EC6A2B',
                     flexShrink: 0,
                     background: 'linear-gradient(180deg, #FFFFFF 0%, #FAFAFA 100%)'
                 }}>
@@ -474,7 +474,7 @@ const DataSource = () => {
                                     transition: 'all 0.2s ease',
                                     boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
                                 }}
-                                onFocus={(e) => e.target.style.borderColor = '#1976D2'}
+                                onFocus={(e) => e.target.style.borderColor = '#EC6A2B'}
                                 onBlur={(e) => e.target.style.borderColor = '#E5E7EB'}
                             />
                         </div>
@@ -491,7 +491,7 @@ const DataSource = () => {
                             letterSpacing: '0.3px'
                         }}>
                             <span style={{
-                                color: '#1976D2',
+                                color: '#EC6A2B',
                                 fontWeight: 700,
                                 marginRight: '6px'
                             }}>
@@ -516,7 +516,7 @@ const DataSource = () => {
                     }}>
                         <thead>
                             <tr style={{
-                                borderBottom: '2px solid #1976D2'
+                                borderBottom: '2px solid #EC6A2B'
                             }}>
                                 <th style={{
                                     textAlign: 'left',
@@ -555,7 +555,7 @@ const DataSource = () => {
                                             backgroundColor: index % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
                                             transition: 'background-color 0.2s',
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E3F2FD'} // Light blue hover
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FFF5F0'} // Light orange hover
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#FFFFFF' : '#FAFAFA'}
                                     >
                                         <td style={{
@@ -570,7 +570,7 @@ const DataSource = () => {
                                                 width: '8px',
                                                 height: '8px',
                                                 borderRadius: '50%',
-                                                backgroundColor: '#1976D2',
+                                                backgroundColor: '#EC6A2B',
                                                 display: 'inline-block',
                                                 flexShrink: 0
                                             }} />
@@ -589,14 +589,14 @@ const DataSource = () => {
                                                     rel="noopener noreferrer"
                                                     style={{
                                                         display: 'inline-block',
-                                                        backgroundColor: '#1976D2',
+                                                        backgroundColor: '#EC6A2B',
                                                         color: '#FFFFFF',
                                                         padding: '7px 18px',
                                                         borderRadius: '4px',
                                                         fontWeight: 600,
                                                         fontSize: '12px',
                                                         textDecoration: 'none',
-                                                        boxShadow: '0 2px 6px rgba(25, 118, 210, 0.3)',
+                                                        boxShadow: '0 2px 6px rgba(236, 106, 43, 0.3)',
                                                         transition: 'all 0.2s ease',
                                                         cursor: 'pointer',
                                                         border: '1px solid transparent',
@@ -604,15 +604,15 @@ const DataSource = () => {
                                                     }}
                                                     onMouseEnter={(e) => {
                                                         const target = e.target as HTMLAnchorElement;
-                                                        target.style.backgroundColor = '#1565C0'; // Darker blue on hover
+                                                        target.style.backgroundColor = '#D64A12'; // Darker orange on hover
                                                         target.style.transform = 'translateY(-1px)';
-                                                        target.style.boxShadow = '0 4px 10px rgba(25, 118, 210, 0.4)';
+                                                        target.style.boxShadow = '0 4px 10px rgba(236, 106, 43, 0.4)';
                                                     }}
                                                     onMouseLeave={(e) => {
                                                         const target = e.target as HTMLAnchorElement;
-                                                        target.style.backgroundColor = '#1976D2';
+                                                        target.style.backgroundColor = '#EC6A2B';
                                                         target.style.transform = 'translateY(0px)';
-                                                        target.style.boxShadow = '0 2px 6px rgba(25, 118, 210, 0.3)';
+                                                        target.style.boxShadow = '0 2px 6px rgba(236, 106, 43, 0.3)';
                                                     }}
                                                 >
                                                     Acessar WebGIS ↗
@@ -658,7 +658,7 @@ const DataSource = () => {
                     color: '#767676',
                     fontSize: '12px',
                     flexShrink: 0,
-                    borderBottom: '3px solid #1976D2'
+                    borderBottom: '3px solid #EC6A2B'
                 }}>
                     <span>
                         Desenvolvido com dados GeoServer OWS
@@ -672,7 +672,7 @@ const DataSource = () => {
                             width: '8px',
                             height: '8px',
                             borderRadius: '50%',
-                            backgroundColor: '#1976D2',
+                            backgroundColor: '#EC6A2B',
                             display: 'inline-block'
                         }} />
                         Style Interface
