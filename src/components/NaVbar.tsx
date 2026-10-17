@@ -33,7 +33,7 @@ const Navbar = () => {
                             boxSizing: "border-box",
 
                             color: isActive
-                                ? "#EC6A2B"
+                                ? "#2563EB"
                                 : "#666666",
 
                             textDecoration: "none",
@@ -46,7 +46,7 @@ const Navbar = () => {
                                 : "transparent",
 
                             borderBottom: isActive
-                                ? "2px solid #EC6A2B"
+                                ? "2px solid #2563EB"
                                 : "2px solid transparent",
 
                             transition:
@@ -81,7 +81,7 @@ const Navbar = () => {
                             boxSizing: "border-box",
 
                             color: isActive
-                                ? "#EC6A2B"
+                                ? "#2563EB"
                                 : "#666666",
 
                             textDecoration: "none",
@@ -94,7 +94,7 @@ const Navbar = () => {
                                 : "transparent",
 
                             borderBottom: isActive
-                                ? "2px solid #EC6A2B"
+                                ? "2px solid #2563EB"
                                 : "2px solid transparent",
 
                             transition:

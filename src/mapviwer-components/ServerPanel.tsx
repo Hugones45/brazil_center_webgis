@@ -46,7 +46,7 @@ export const ServerPanel = ({
 
     if (!showServerPanel) {
         return (
-            <button onClick={() => setShowServerPanel(true)} style={{ position: 'absolute', top: 80, left: 10, zIndex: 1000, padding: '10px 20px', backgroundColor: '#EC6A2B', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', boxShadow: '0 2px 10px rgba(0,0,0,0.2)', fontWeight: 'bold', fontSize: 14 }}>
+            <button onClick={() => setShowServerPanel(true)} style={{ position: 'absolute', top: 80, left: 10, zIndex: 1000, padding: '10px 20px', backgroundColor: '#2563EB', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', boxShadow: '0 2px 10px rgba(0,0,0,0.2)', fontWeight: 'bold', fontSize: 14 }}>
                 ⚙️ Servidores
             </button>
         );
@@ -91,7 +91,7 @@ export const ServerPanel = ({
                         {selectedServer.label === 'Personalizado' && (
                             <div>
                                 <input type="text" value={customUrl} onChange={(e) => setCustomUrl(e.target.value)} placeholder="Cole sua URL WMS ou WFS aqui..." style={{ width: '100%', padding: '8px', marginBottom: 5, borderRadius: 4, border: '1px solid #E0E0E0', fontSize: 12, boxSizing: 'border-box', color: '#3B3B3B' }} onKeyPress={(e) => { if (e.key === 'Enter') handleCustomUrlSubmit(); }} />
-                                <button onClick={handleCustomUrlSubmit} style={{ width: '100%', padding: '8px', backgroundColor: '#EC6A2B', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>Conectar ao Servidor Personalizado</button>
+                                <button onClick={handleCustomUrlSubmit} style={{ width: '100%', padding: '8px', backgroundColor: '#2563EB', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>Conectar ao Servidor Personalizado</button>
                             </div>
                         )}
 
@@ -111,8 +111,8 @@ export const ServerPanel = ({
                                 <div style={{ marginTop: 10 }}>
                                     <div style={{ fontSize: 10, color: '#888', marginBottom: 4, fontWeight: 600, letterSpacing: '0.3px' }}>MAPA BASE</div>
                                     <div style={{ display: 'flex', gap: 4 }}>
-                                        <button onClick={() => switchBasemap('satellite')} style={{ flex: 1, padding: '6px 4px', fontSize: 11, backgroundColor: activeBasemap === 'satellite' ? '#EC6A2B' : 'white', color: activeBasemap === 'satellite' ? 'white' : '#3B3B3B', border: '1px solid ' + (activeBasemap === 'satellite' ? '#EC6A2B' : '#E0E0E0'), borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>🛰️ Satélite</button>
-                                        <button onClick={() => switchBasemap('light')} style={{ flex: 1, padding: '6px 4px', fontSize: 11, backgroundColor: activeBasemap === 'light' ? '#EC6A2B' : 'white', color: activeBasemap === 'light' ? 'white' : '#3B3B3B', border: '1px solid ' + (activeBasemap === 'light' ? '#EC6A2B' : '#E0E0E0'), borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>☀️ Claro</button>
+                                        <button onClick={() => switchBasemap('satellite')} style={{ flex: 1, padding: '6px 4px', fontSize: 11, backgroundColor: activeBasemap === 'satellite' ? '#2563EB' : 'white', color: activeBasemap === 'satellite' ? 'white' : '#3B3B3B', border: '1px solid ' + (activeBasemap === 'satellite' ? '#2563EB' : '#E0E0E0'), borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>🛰️ Satélite</button>
+                                        <button onClick={() => switchBasemap('light')} style={{ flex: 1, padding: '6px 4px', fontSize: 11, backgroundColor: activeBasemap === 'light' ? '#2563EB' : 'white', color: activeBasemap === 'light' ? 'white' : '#3B3B3B', border: '1px solid ' + (activeBasemap === 'light' ? '#2563EB' : '#E0E0E0'), borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>☀️ Claro</button>
                                     </div>
                                 </div>
                             </div>

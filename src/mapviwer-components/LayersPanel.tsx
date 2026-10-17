@@ -51,10 +51,10 @@ export const LayersPanel = ({
         <div style={{ position: 'absolute', top: 10, right: 10, width: 350, maxHeight: '80vh', backgroundColor: 'white', borderRadius: 8, boxShadow: '0 2px 10px rgba(0,0,0,0.15)', zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
             <div style={{ padding: '0', borderBottom: layersPanelCollapsed ? 'none' : '1px solid #F0F0F0', backgroundColor: '#FFFFFF', borderRadius: '8px 8px 0 0' }}>
                 <div style={{ display: 'flex', borderBottom: '2px solid #F0F0F0' }}>
-                    <button onClick={() => setActiveTab('all')} style={{ flex: 1, padding: '12px 15px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: activeTab === 'all' ? 'bold' : 'normal', color: activeTab === 'all' ? '#EC6A2B' : '#666', borderBottom: activeTab === 'all' ? '3px solid #EC6A2B' : '3px solid transparent', transition: 'all 0.2s', marginBottom: '-2px' }}>📋 Todas as Camadas ({layers.length})</button>
-                    <button onClick={() => setActiveTab('selected')} style={{ flex: 1, padding: '12px 15px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: activeTab === 'selected' ? 'bold' : 'normal', color: activeTab === 'selected' ? '#EC6A2B' : '#666', borderBottom: activeTab === 'selected' ? '3px solid #EC6A2B' : '3px solid transparent', transition: 'all 0.2s', marginBottom: '-2px', position: 'relative' }}>
+                    <button onClick={() => setActiveTab('all')} style={{ flex: 1, padding: '12px 15px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: activeTab === 'all' ? 'bold' : 'normal', color: activeTab === 'all' ? '#2563EB' : '#666', borderBottom: activeTab === 'all' ? '3px solid #2563EB' : '3px solid transparent', transition: 'all 0.2s', marginBottom: '-2px' }}>📋 Todas as Camadas ({layers.length})</button>
+                    <button onClick={() => setActiveTab('selected')} style={{ flex: 1, padding: '12px 15px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: activeTab === 'selected' ? 'bold' : 'normal', color: activeTab === 'selected' ? '#2563EB' : '#666', borderBottom: activeTab === 'selected' ? '3px solid #2563EB' : '3px solid transparent', transition: 'all 0.2s', marginBottom: '-2px', position: 'relative' }}>
                         ⭐ Selecionadas ({activeLayers.size})
-                        {activeLayers.size > 0 && <span style={{ position: 'absolute', top: '6px', right: '8px', backgroundColor: '#EC6A2B', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold' }}>{activeLayers.size}</span>}
+                        {activeLayers.size > 0 && <span style={{ position: 'absolute', top: '6px', right: '8px', backgroundColor: '#2563EB', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold' }}>{activeLayers.size}</span>}
                     </button>
                     <button onClick={() => setLayersPanelCollapsed(!layersPanelCollapsed)} title={layersPanelCollapsed ? 'Expandir' : 'Recolher'} style={{ padding: '12px 10px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, color: '#666', marginBottom: '-2px', lineHeight: 1 }}>{layersPanelCollapsed ? '▼' : '▲'}</button>
                 </div>
@@ -63,16 +63,16 @@ export const LayersPanel = ({
                     <>
                         <div style={{ padding: '10px 15px', backgroundColor: spatialFilter ? '#FFF5F0' : '#fff', borderBottom: '1px solid #F0F0F0' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spatialFilter ? 8 : 0 }}>
-                                <button onClick={handleDrawingToggle} style={{ padding: '6px 12px', fontSize: 11, backgroundColor: drawingEnabled ? '#D64A12' : '#EC6A2B', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold', flex: 1 }}>
-                                    {drawingEnabled ? '#D64A12 Parar Desenho' : '✏️ Desenhar Área de Interesse'}
+                                <button onClick={handleDrawingToggle} style={{ padding: '6px 12px', fontSize: 11, backgroundColor: drawingEnabled ? '#1D4ED8' : '#2563EB', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold', flex: 1 }}>
+                                    {drawingEnabled ? '#1D4ED8 Parar Desenho' : '✏️ Desenhar Área de Interesse'}
                                 </button>
                             </div>
                             {spatialFilter && (
                                 <div style={{ marginTop: 8 }}>
-                                    <div style={{ fontSize: 11, color: '#D64A12', fontWeight: 'bold', marginBottom: 8, textAlign: 'center', backgroundColor: '#FFF5F0', padding: '4px', borderRadius: 3 }}>✅ Área de filtro ativa - Downloads serão limitados a esta área</div>
+                                    <div style={{ fontSize: 11, color: '#1D4ED8', fontWeight: 'bold', marginBottom: 8, textAlign: 'center', backgroundColor: '#FFF5F0', padding: '4px', borderRadius: 3 }}>✅ Área de filtro ativa - Downloads serão limitados a esta área</div>
                                     <div style={{ fontSize: 10, color: '#666', marginBottom: 8, textAlign: 'center' }}>Selecione uma camada abaixo para baixar apenas os dados desta área</div>
                                     <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-                                        <button onClick={() => { if (drawRef.current) { try { drawRef.current.clear(); } catch (e) { } } setSpatialFilter(null); setDrawingEnabled(false); setTimeout(() => bringDrawLayersToFront(), 50); }} style={{ flex: 1, padding: '4px', fontSize: 10, backgroundColor: '#EF5350', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer' }}>🗑️ Limpar Área</button>
+                                        <button onClick={() => { if (drawRef.current) { try { drawRef.current.clear(); } catch (e) { } } setSpatialFilter(null); setDrawingEnabled(false); setTimeout(() => bringDrawLayersToFront(), 50); }} style={{ flex: 1, padding: '4px', fontSize: 10, backgroundColor: '#2563EB', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer' }}>🗑️ Limpar Área</button>
                                     </div>
                                 </div>
                             )}
@@ -80,15 +80,21 @@ export const LayersPanel = ({
 
                         {activeLayers.size > 0 && spatialFilter && (
                             <div style={{ padding: '10px', backgroundColor: '#FFF5F0' }}>
-                                <div style={{ fontSize: 12, fontWeight: 'bold', color: '#D64A12', marginBottom: 8, textAlign: 'center' }}>🎯 Baixar dados da área selecionada:</div>
+                                <div style={{ fontSize: 12, fontWeight: 'bold', color: '#1D4ED8', marginBottom: 8, textAlign: 'center' }}>🎯 Baixar dados da área selecionada:</div>
                                 {activeLayersList.map(layer => (
-                                    <div key={layer.name} style={{ padding: '8px', backgroundColor: 'white', marginBottom: 5, borderRadius: 4, border: '2px solid #EC6A2B' }}>
+                                    <div key={layer.name} style={{ padding: '8px', backgroundColor: 'white', marginBottom: 5, borderRadius: 4, border: '2px solid #2563EB' }}>
                                         <div style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 5, color: '#3B3B3B' }}>{layer.title}</div>
                                         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                                            <button onClick={(e) => { e.stopPropagation(); downloadLayerByDraw(layer.name, 'geojson'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 8px', fontSize: 9, backgroundColor: '#EC6A2B', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1, fontWeight: 'bold' }}>{downloadingLayer === layer.name ? '...' : '📦 GeoJSON'}</button>
-                                            <button onClick={(e) => { e.stopPropagation(); downloadLayerByDraw(layer.name, 'shapefile'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 8px', fontSize: 9, backgroundColor: '#D64A12', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1, fontWeight: 'bold' }}>{downloadingLayer === layer.name ? '...' : '📦 SHP'}</button>
+
+                                            {/* PINK GEOJSON BUTTON HERE */}
+                                            <button onClick={(e) => { e.stopPropagation(); downloadLayerByDraw(layer.name, 'geojson'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 8px', fontSize: 9, backgroundColor: '#E91E63', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1, fontWeight: 'bold' }}>{downloadingLayer === layer.name ? '...' : '📦 GeoJSON'}</button>
+
+                                            <button onClick={(e) => { e.stopPropagation(); downloadLayerByDraw(layer.name, 'shapefile'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 8px', fontSize: 9, backgroundColor: '#1D4ED8', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1, fontWeight: 'bold' }}>{downloadingLayer === layer.name ? '...' : '📦 SHP'}</button>
                                             <button onClick={(e) => { e.stopPropagation(); downloadLayerByDraw(layer.name, 'csv'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 8px', fontSize: 9, backgroundColor: '#FF9800', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1, fontWeight: 'bold' }}>{downloadingLayer === layer.name ? '...' : '📦 CSV'}</button>
-                                            <button onClick={(e) => { e.stopPropagation(); downloadLayerByDraw(layer.name, 'kml'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 8px', fontSize: 9, backgroundColor: '#E91E63', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1, fontWeight: 'bold' }}>{downloadingLayer === layer.name ? '...' : '📦 KML'}</button>
+
+                                            {/* I left KML as a slightly lighter pink so they don't blend together */}
+                                            <button onClick={(e) => { e.stopPropagation(); downloadLayerByDraw(layer.name, 'kml'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 8px', fontSize: 9, backgroundColor: '#F06292', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1, fontWeight: 'bold' }}>{downloadingLayer === layer.name ? '...' : '📦 KML'}</button>
+
                                         </div>
                                     </div>
                                 ))}
@@ -121,14 +127,14 @@ export const LayersPanel = ({
                         {error && (
                             <div style={{ padding: '10px' }}>
                                 <div style={{ color: '#EF5350', marginBottom: 10, fontSize: 13 }}>{error}</div>
-                                <button onClick={() => fetchLayers(baseUrl)} style={{ padding: '8px 15px', backgroundColor: '#EC6A2B', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', width: '100%' }}>Tentar Novamente</button>
+                                <button onClick={() => fetchLayers(baseUrl)} style={{ padding: '8px 15px', backgroundColor: '#2563EB', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', width: '100%' }}>Tentar Novamente</button>
                             </div>
                         )}
 
                         {!loading && !error && activeTab === 'all' && (
                             <>
                                 {filteredLayers.map((layer) => (
-                                    <div key={layer.name} style={{ padding: '10px', margin: '5px 0', borderRadius: 6, backgroundColor: activeLayers.has(layer.name) ? '#FFF5F0' : '#F8F8F8', border: activeLayers.has(layer.name) ? '2px solid #EC6A2B' : '1px solid transparent', transition: 'all 0.2s' }}>
+                                    <div key={layer.name} style={{ padding: '10px', margin: '5px 0', borderRadius: 6, backgroundColor: activeLayers.has(layer.name) ? '#FFF5F0' : '#F8F8F8', border: activeLayers.has(layer.name) ? '2px solid #2563EB' : '1px solid transparent', transition: 'all 0.2s' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                                             <input type="checkbox" checked={activeLayers.has(layer.name)} onChange={() => toggleLayer(layer.name)} style={{ cursor: 'pointer', transform: 'scale(1.2)' }} />
                                             <div style={{ flex: 1 }}>
@@ -140,10 +146,16 @@ export const LayersPanel = ({
                                         </div>
                                         <div style={{ display: 'flex', gap: 4, marginLeft: 28, flexWrap: 'wrap' }}>
                                             <button onClick={(e) => { e.stopPropagation(); openAttributeTable(layer.name); }} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#9C27B0', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', fontWeight: 'bold' }}>📊 Abrir Tabela</button>
-                                            <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'geojson'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#EC6A2B', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'GeoJSON'}</button>
-                                            <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'shapefile'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#D64A12', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'SHP'}</button>
+
+                                            {/* PINK GEOJSON BUTTON HERE */}
+                                            <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'geojson'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#E91E63', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'GeoJSON'}</button>
+
+                                            <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'shapefile'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#1D4ED8', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'SHP'}</button>
                                             <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'csv'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#FF9800', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'CSV'}</button>
-                                            <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'kml'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#E91E63', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'KML'}</button>
+
+                                            {/* I left KML as a slightly lighter pink so they don't blend together */}
+                                            <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'kml'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#F06292', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'KML'}</button>
+
                                         </div>
                                     </div>
                                 ))}
@@ -162,9 +174,9 @@ export const LayersPanel = ({
                                 ) : (
                                     <>
                                         {filteredActiveLayers.map((layer) => (
-                                            <div key={layer.name} style={{ padding: '12px', margin: '5px 0', borderRadius: 6, backgroundColor: '#FFF5F0', border: '2px solid #EC6A2B', transition: 'all 0.2s' }}>
+                                            <div key={layer.name} style={{ padding: '12px', margin: '5px 0', borderRadius: 6, backgroundColor: '#FFF5F0', border: '2px solid #2563EB', transition: 'all 0.2s' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                                    <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#EC6A2B', flexShrink: 0 }} />
+                                                    <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#2563EB', flexShrink: 0 }} />
                                                     <div style={{ flex: 1 }}>
                                                         <div style={{ fontWeight: 600, fontSize: 13, color: '#3B3B3B' }}>
                                                             {layerSearch ? <span dangerouslySetInnerHTML={{ __html: layer.title.replace(new RegExp(`(${layerSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), '<mark style="background-color: #FFF5F0; padding: 0 2px;">$1</mark>') }} /> : layer.title}
@@ -177,10 +189,16 @@ export const LayersPanel = ({
                                                 <div style={{ display: 'flex', gap: 4, marginLeft: 14, flexWrap: 'wrap' }}>
                                                     <button onClick={(e) => { e.stopPropagation(); openAttributeTable(layer.name); }} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#9C27B0', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', fontWeight: 'bold' }}>📊 Abrir Tabela</button>
                                                     <button onClick={(e) => { e.stopPropagation(); zoomToLayer(layer.name); }} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', fontWeight: 'bold' }} title="Zoom para a extensão da camada">🔍 Zoom</button>
-                                                    <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'geojson'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#EC6A2B', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'GeoJSON'}</button>
-                                                    <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'shapefile'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#D64A12', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'SHP'}</button>
+
+                                                    {/* PINK GEOJSON BUTTON HERE */}
+                                                    <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'geojson'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#E91E63', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'GeoJSON'}</button>
+
+                                                    <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'shapefile'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#1D4ED8', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'SHP'}</button>
                                                     <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'csv'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#FF9800', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'CSV'}</button>
-                                                    <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'kml'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#E91E63', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'KML'}</button>
+
+                                                    {/* I left KML as a slightly lighter pink so they don't blend together */}
+                                                    <button onClick={(e) => { e.stopPropagation(); downloadLayer(layer.name, 'kml'); }} disabled={downloadingLayer === layer.name} style={{ padding: '4px 10px', fontSize: 10, backgroundColor: '#F06292', color: 'white', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: downloadingLayer === layer.name ? 0.7 : 1 }}>{downloadingLayer === layer.name ? '...' : 'KML'}</button>
+
                                                 </div>
                                             </div>
                                         ))}

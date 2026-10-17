@@ -48,7 +48,7 @@ const Header = () => {
                         style={{
                             margin: "3px 0 0",
                             fontSize: "11px",
-                            color: "#EC6A2B",
+                            color: "#2563EB",
                             fontWeight: 500,
                             letterSpacing: "0.5px",
                             textTransform: "uppercase",
@@ -86,7 +86,7 @@ const Header = () => {
                             width: "8px",
                             height: "8px",
                             borderRadius: "50%",
-                            backgroundColor: "#EC6A2B",
+                            backgroundColor: "#2563EB",
                             boxShadow: "0 0 8px rgba(236, 106, 43, 0.35)",
                             display: "inline-block",
                         }}
@@ -101,7 +101,7 @@ const Header = () => {
                         borderRadius: "4px",
                         backgroundColor: "rgba(236, 106, 43, 0.08)",
                         border: "1px solid rgba(236, 106, 43, 0.15)",
-                        color: "#EC6A2B",
+                        color: "#2563EB",
                         fontSize: "10px",
                         fontWeight: 700,
                         letterSpacing: "0.5px",
@@ -120,7 +120,7 @@ const Header = () => {
                     width: "100%",
                     height: "2px",
                     background:
-                        "linear-gradient(90deg, #EC6A2B 0%, #D64A12 45%, rgba(236, 106, 43, 0) 100%)",
+                        "linear-gradient(90deg, #2563EB 0%, #1D4ED8 45%, rgba(236, 106, 43, 0) 100%)",
                 }}
             />
         </header>
