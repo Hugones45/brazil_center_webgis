@@ -15,7 +15,7 @@ const Header = () => {
                 boxShadow: "0 2px 12px rgba(0, 0, 0, 0.08)",
                 zIndex: 1100,
                 position: "relative",
-                borderBottom: "1px solid #E0E0E0",
+                borderBottom: "1px solid #adbafc",
                 fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
             }}
         >

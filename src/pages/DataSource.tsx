@@ -4,7 +4,6 @@ import { useState } from 'react';
 // --- ORGANIZED SERVER LIST WITH WEBGIS LINKS ---
 // Priority: Direct WebGIS Portal > INDE Visualizador > Official Institutional Website
 const SERVER_OPTIONS = [
-    { label: 'ANATEL', url: 'https://informacoes.anatel.gov.br/legislacao/' },
     { label: 'ANP', url: 'https://www.gov.br/anp/pt-br' },
     { label: 'ANTT', url: 'https://www.gov.br/antt/pt-br' },
     { label: 'BNDES', url: 'https://www.bndes.gov.br/wps/portal/site/home' },
@@ -12,22 +11,18 @@ const SERVER_OPTIONS = [
     { label: 'CPRM / SGB', url: 'https://geoportal.sgb.gov.br/' },
     { label: 'DataGeo - São Paulo', url: 'https://datageo.ambiente.sp.gov.br/' },
     { label: 'DNIT', url: 'https://www.gov.br/dnit/pt-br' },
-    { label: 'EMBRAPA', url: 'https://www.embrapa.br/' }, // Uses institutional site
     { label: 'EPE', url: 'https://www.epe.gov.br/pt' },
     { label: 'FUNAI', url: 'https://www.gov.br/funai/pt-br' },
     { label: 'FUNAI/CMR', url: 'https://cmr.funai.gov.br/' },
     { label: 'IBGE - CENSO 2022', url: 'https://censo2022.ibge.gov.br/panorama/' },
-    { label: 'IBGE - Malhas Territoriais', url: 'https://www.ibge.gov.br/geociencias/organizacao-do-territorio/malhas-territoriais.html' }, // Uses institutional page
+    { label: 'IBGE - Malhas Territoriais', url: 'https://www.ibge.gov.br/geociencias/organizacao-do-territorio/malhas-territoriais.html' },
     { label: 'IBGE - ODS', url: 'https://odsbrasil.gov.br/' },
-    { label: 'ICA', url: 'https://www2.decea.mil.br/?page_id=149' },
     { label: 'ICMBIO', url: 'https://www.gov.br/icmbio/pt-br' },
     { label: 'IDE SISEMA (MG)', url: 'https://visualizador.idesisema.meioambiente.mg.gov.br/' },
-    { label: 'IDE-GEOBASES (ES)', url: 'https://geobases.es.gov.br/' },
     { label: 'INDE Catalog', url: 'https://www.inde.gov.br/' },
     { label: 'INEA (RJ)', url: 'https://www.inea.rj.gov.br/' },
     { label: 'INPE', url: 'https://terrabrasilis.dpi.inpe.br/' },
     { label: 'IPHAN', url: 'https://visualizador.inde.gov.br/Ativar?url=https://www.snirh.gov.br/arcgis/services/INDE/Camadas/MapServer/WMSServer' },
-    { label: 'MapBiomas Alerta', url: 'https://alerta.mapbiomas.org/' },
     { label: 'MB/COMPAAz', url: 'https://visualizador.inde.gov.br/Ativar?url=https://www.snirh.gov.br/arcgis/services/INDE/Camadas/MapServer/WMSServer' },
     { label: 'MB/DPC', url: 'https://visualizador.inde.gov.br/Ativar?url=https://www.snirh.gov.br/arcgis/services/INDE/Camadas/MapServer/WMSServer' },
     { label: 'MB/DPHDM', url: 'https://visualizador.inde.gov.br/Ativar?url=https://www.snirh.gov.br/arcgis/services/INDE/Camadas/MapServer/WMSServer' },
@@ -39,15 +34,12 @@ const SERVER_OPTIONS = [
     { label: 'MTUR', url: 'https://www.gov.br/turismo/pt-br' },
     { label: 'PGGM', url: 'https://pggmbrasil.org/' },
     { label: 'Prefeitura BH (MG) - BH Map', url: 'https://bhmap.pbh.gov.br/v2/' },
-    { label: 'Prefeitura BH (MG) - Geoservicos', url: 'https://geoservicos.pbh.gov.br/' },
     { label: 'PRODEMG (MG)', url: 'https://www.prodemge.mg.gov.br/' },
-    { label: 'SEMACE (CE)', url: 'https://www.semace.ce.gov.br/' },
     { label: 'SEPLAN (TO)', url: 'https://www.to.gov.br/seplan/' },
     { label: 'SPU', url: 'https://sistema.patrimoniodetodos.gov.br/' },
     { label: 'UFABC', url: 'https://www.ufabc.edu.br/' },
     { label: 'VALEC', url: 'https://www.gov.br/pt-br/orgaos/valec-engenharia-construcoes-e-ferrovias-s-a' },
 ];
-
 const DataSource = () => {
     const [searchTerm, setSearchTerm] = useState('');
 

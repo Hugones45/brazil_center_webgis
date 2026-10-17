@@ -42,7 +42,7 @@ const Navbar = () => {
                             fontWeight: isActive ? 600 : 450,
 
                             backgroundColor: isActive
-                                ? "rgba(236, 106, 43, 0.05)"
+                                ? "rgba(112, 190, 228, 0.05)"
                                 : "transparent",
 
                             borderBottom: isActive
@@ -90,7 +90,7 @@ const Navbar = () => {
                             fontWeight: isActive ? 600 : 450,
 
                             backgroundColor: isActive
-                                ? "rgba(236, 106, 43, 0.05)"
+                                ? "rgba(112, 190, 228, 0.05)"
                                 : "transparent",
 
                             borderBottom: isActive
